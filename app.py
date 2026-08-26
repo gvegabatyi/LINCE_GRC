@@ -2,6 +2,7 @@
 Serviphar GRC Lite - Plataforma Web de Auditoría y Cumplimiento GRC
 Diseñada para visitas a clientes en terreno, registro de ROPA, auditorías y exportación a Excel.
 Compatible con Neon PostgreSQL y Streamlit.
+Incluye migraciones automáticas seguras de esquema SQL.
 """
 
 import streamlit as st
@@ -26,7 +27,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Estilos CSS personalizados para mejorar el aspecto en tablets y notebooks
+# Estilos CSS personalizados
 st.markdown("""
 <style>
     .metric-card {
@@ -39,27 +40,6 @@ st.markdown("""
     .stButton>button {
         border-radius: 6px;
         font-weight: 500;
-    }
-    .status-badge-high {
-        background-color: #d4edda;
-        color: #155724;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-weight: bold;
-    }
-    .status-badge-med {
-        background-color: #fff3cd;
-        color: #856404;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-weight: bold;
-    }
-    .status-badge-low {
-        background-color: #f8d7da;
-        color: #721c24;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-weight: bold;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -96,7 +76,7 @@ def get_connection():
         st.stop()
 
 def init_db():
-    """Inicializa automáticamente las 4 tablas SQL si no existen."""
+    """Inicializa y migra automáticamente las tablas y columnas necesarias sin perder datos."""
     try:
         conn = get_connection()
         with conn.cursor() as c:
@@ -105,7 +85,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS empresas (
                 id SERIAL PRIMARY KEY,
                 nombre VARCHAR(255) NOT NULL,
-                rut VARCHAR(20) UNIQUE NOT NULL,
+                rut VARCHAR(20),
                 direccion VARCHAR(255),
                 contacto VARCHAR(100),
                 email VARCHAR(100),
@@ -113,13 +93,19 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             """)
+            # Migraciones seguras para empresas preexistentes
+            c.execute("ALTER TABLE empresas ADD COLUMN IF NOT EXISTS direccion VARCHAR(255);")
+            c.execute("ALTER TABLE empresas ADD COLUMN IF NOT EXISTS contacto VARCHAR(100);")
+            c.execute("ALTER TABLE empresas ADD COLUMN IF NOT EXISTS email VARCHAR(100);")
+            c.execute("ALTER TABLE empresas ADD COLUMN IF NOT EXISTS telefono VARCHAR(20);")
+            c.execute("ALTER TABLE empresas ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;")
 
             # 2. Tabla tratamientos (ROPA)
             c.execute("""
             CREATE TABLE IF NOT EXISTS tratamientos (
                 id SERIAL PRIMARY KEY,
                 empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE,
-                nombre_tratamiento VARCHAR(255) NOT NULL,
+                nombre_tratamiento VARCHAR(255),
                 descripcion TEXT,
                 base_legal VARCHAR(100),
                 datos_personales TEXT,
@@ -129,19 +115,78 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             """)
+            # Migraciones seguras para tratamientos preexistentes
+            c.execute("ALTER TABLE tratamientos ADD COLUMN IF NOT EXISTS empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE;")
+            c.execute("ALTER TABLE tratamientos ADD COLUMN IF NOT EXISTS nombre_tratamiento VARCHAR(255);")
+            c.execute("ALTER TABLE tratamientos ADD COLUMN IF NOT EXISTS descripcion TEXT;")
+            c.execute("ALTER TABLE tratamientos ADD COLUMN IF NOT EXISTS base_legal VARCHAR(100);")
+            c.execute("ALTER TABLE tratamientos ADD COLUMN IF NOT EXISTS datos_personales TEXT;")
+            c.execute("ALTER TABLE tratamientos ADD COLUMN IF NOT EXISTS responsables TEXT;")
+            c.execute("ALTER TABLE tratamientos ADD COLUMN IF NOT EXISTS encargados TEXT;")
+            c.execute("ALTER TABLE tratamientos ADD COLUMN IF NOT EXISTS transferencias TEXT;")
+            c.execute("ALTER TABLE tratamientos ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;")
+
+            # Migrar datos si existían columnas del esquema anterior
+            c.execute("""
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tratamientos' AND column_name='nombre') THEN
+                    UPDATE tratamientos SET nombre_tratamiento = nombre WHERE nombre_tratamiento IS NULL;
+                END IF;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tratamientos' AND column_name='finalidad') THEN
+                    UPDATE tratamientos SET descripcion = finalidad WHERE descripcion IS NULL;
+                END IF;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tratamientos' AND column_name='base_licitud') THEN
+                    UPDATE tratamientos SET base_legal = base_licitud WHERE base_legal IS NULL;
+                END IF;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tratamientos' AND column_name='datos') THEN
+                    UPDATE tratamientos SET datos_personales = datos WHERE datos_personales IS NULL;
+                END IF;
+            END $$;
+            """)
 
             # 3. Tabla visitas (Auditorías)
             c.execute("""
             CREATE TABLE IF NOT EXISTS visitas (
                 id SERIAL PRIMARY KEY,
                 empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE,
-                fecha_visita DATE NOT NULL,
+                fecha_visita DATE DEFAULT CURRENT_DATE,
                 auditor VARCHAR(100),
                 checklist_seguridad JSONB,
-                puntaje INTEGER,
+                puntaje INTEGER DEFAULT 0,
                 observaciones TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
+            """)
+            # Migraciones seguras para visitas preexistentes
+            c.execute("ALTER TABLE visitas ADD COLUMN IF NOT EXISTS empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE;")
+            c.execute("ALTER TABLE visitas ADD COLUMN IF NOT EXISTS fecha_visita DATE DEFAULT CURRENT_DATE;")
+            c.execute("ALTER TABLE visitas ADD COLUMN IF NOT EXISTS auditor VARCHAR(100);")
+            c.execute("ALTER TABLE visitas ADD COLUMN IF NOT EXISTS checklist_seguridad JSONB;")
+            c.execute("ALTER TABLE visitas ADD COLUMN IF NOT EXISTS puntaje INTEGER DEFAULT 0;")
+            c.execute("ALTER TABLE visitas ADD COLUMN IF NOT EXISTS observaciones TEXT;")
+            c.execute("ALTER TABLE visitas ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;")
+
+            # Migrar datos si existían columnas del esquema anterior en visitas
+            c.execute("""
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='visitas' AND column_name='fecha') THEN
+                    UPDATE visitas SET fecha_visita = fecha WHERE fecha_visita IS NULL;
+                END IF;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='visitas' AND column_name='hallazgos') THEN
+                    UPDATE visitas SET observaciones = hallazgos WHERE observaciones IS NULL;
+                END IF;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='visitas' AND column_name='participantes') THEN
+                    UPDATE visitas SET auditor = participantes WHERE auditor IS NULL;
+                END IF;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='visitas' AND column_name='empresa') THEN
+                    UPDATE visitas v
+                    SET empresa_id = e.id
+                    FROM empresas e
+                    WHERE v.empresa_id IS NULL AND (v.empresa = e.nombre OR v.empresa = e.rut);
+                END IF;
+            END $$;
             """)
 
             # 4. Tabla evidencias
@@ -158,7 +203,7 @@ def init_db():
             conn.commit()
         conn.close()
     except Exception as e:
-        st.error(f"Error al inicializar tablas en la base de datos: {e}")
+        st.error(f"Error al inicializar/migrar tablas en la base de datos: {e}")
 
 # ==============================================================================
 # PREGUNTAS DEL CHECKLIST DE SEGURIDAD (15 ITEMS)
@@ -235,7 +280,12 @@ def get_empresas_df(search_term=""):
         conn = get_connection()
         if search_term:
             query = """
-                SELECT id, nombre, rut, direccion, contacto, email, telefono, created_at
+                SELECT id, nombre, COALESCE(rut, '') AS rut, 
+                       COALESCE(direccion, '') AS direccion, 
+                       COALESCE(contacto, '') AS contacto, 
+                       COALESCE(email, '') AS email, 
+                       COALESCE(telefono, '') AS telefono, 
+                       created_at
                 FROM empresas
                 WHERE nombre ILIKE %s OR rut ILIKE %s
                 ORDER BY id DESC
@@ -244,7 +294,12 @@ def get_empresas_df(search_term=""):
             df = pd.read_sql_query(query, conn, params=(term, term))
         else:
             query = """
-                SELECT id, nombre, rut, direccion, contacto, email, telefono, created_at
+                SELECT id, nombre, COALESCE(rut, '') AS rut, 
+                       COALESCE(direccion, '') AS direccion, 
+                       COALESCE(contacto, '') AS contacto, 
+                       COALESCE(email, '') AS email, 
+                       COALESCE(telefono, '') AS telefono, 
+                       created_at
                 FROM empresas
                 ORDER BY id DESC
             """
@@ -311,22 +366,38 @@ def get_tratamientos_df(empresa_id=None):
         conn = get_connection()
         if empresa_id:
             query = """
-                SELECT t.id, e.nombre AS empresa, e.rut AS rut_empresa, t.nombre_tratamiento, 
-                       t.descripcion, t.base_legal, t.datos_personales, t.responsables, 
-                       t.encargados, t.transferencias, t.created_at, t.empresa_id
+                SELECT t.id, 
+                       COALESCE(e.nombre, 'Sin Empresa Asignada') AS empresa, 
+                       COALESCE(e.rut, '') AS rut_empresa, 
+                       COALESCE(t.nombre_tratamiento, 'Tratamiento sin nombre') AS nombre_tratamiento, 
+                       COALESCE(t.descripcion, '') AS descripcion, 
+                       COALESCE(t.base_legal, '') AS base_legal, 
+                       COALESCE(t.datos_personales, '') AS datos_personales, 
+                       COALESCE(t.responsables, '') AS responsables, 
+                       COALESCE(t.encargados, '') AS encargados, 
+                       COALESCE(t.transferencias, '') AS transferencias, 
+                       t.created_at, t.empresa_id
                 FROM tratamientos t
-                JOIN empresas e ON t.empresa_id = e.id
+                LEFT JOIN empresas e ON t.empresa_id = e.id
                 WHERE t.empresa_id = %s
                 ORDER BY t.id DESC
             """
             df = pd.read_sql_query(query, conn, params=(empresa_id,))
         else:
             query = """
-                SELECT t.id, e.nombre AS empresa, e.rut AS rut_empresa, t.nombre_tratamiento, 
-                       t.descripcion, t.base_legal, t.datos_personales, t.responsables, 
-                       t.encargados, t.transferencias, t.created_at, t.empresa_id
+                SELECT t.id, 
+                       COALESCE(e.nombre, 'Sin Empresa Asignada') AS empresa, 
+                       COALESCE(e.rut, '') AS rut_empresa, 
+                       COALESCE(t.nombre_tratamiento, 'Tratamiento sin nombre') AS nombre_tratamiento, 
+                       COALESCE(t.descripcion, '') AS descripcion, 
+                       COALESCE(t.base_legal, '') AS base_legal, 
+                       COALESCE(t.datos_personales, '') AS datos_personales, 
+                       COALESCE(t.responsables, '') AS responsables, 
+                       COALESCE(t.encargados, '') AS encargados, 
+                       COALESCE(t.transferencias, '') AS transferencias, 
+                       t.created_at, t.empresa_id
                 FROM tratamientos t
-                JOIN empresas e ON t.empresa_id = e.id
+                LEFT JOIN empresas e ON t.empresa_id = e.id
                 ORDER BY t.id DESC
             """
             df = pd.read_sql_query(query, conn)
@@ -386,20 +457,32 @@ def get_visitas_df(empresa_id=None):
         conn = get_connection()
         if empresa_id:
             query = """
-                SELECT v.id, e.nombre AS empresa, e.rut AS rut_empresa, v.fecha_visita, 
-                       v.auditor, v.puntaje, v.observaciones, v.checklist_seguridad, v.created_at, v.empresa_id
+                SELECT v.id, 
+                       COALESCE(e.nombre, 'Sin Empresa Asignada') AS empresa, 
+                       COALESCE(e.rut, '') AS rut_empresa, 
+                       COALESCE(v.fecha_visita, CURRENT_DATE) AS fecha_visita, 
+                       COALESCE(v.auditor, '') AS auditor, 
+                       COALESCE(v.puntaje, 0) AS puntaje, 
+                       COALESCE(v.observaciones, '') AS observaciones, 
+                       v.checklist_seguridad, v.created_at, v.empresa_id
                 FROM visitas v
-                JOIN empresas e ON v.empresa_id = e.id
+                LEFT JOIN empresas e ON v.empresa_id = e.id
                 WHERE v.empresa_id = %s
                 ORDER BY v.fecha_visita DESC, v.id DESC
             """
             df = pd.read_sql_query(query, conn, params=(empresa_id,))
         else:
             query = """
-                SELECT v.id, e.nombre AS empresa, e.rut AS rut_empresa, v.fecha_visita, 
-                       v.auditor, v.puntaje, v.observaciones, v.checklist_seguridad, v.created_at, v.empresa_id
+                SELECT v.id, 
+                       COALESCE(e.nombre, 'Sin Empresa Asignada') AS empresa, 
+                       COALESCE(e.rut, '') AS rut_empresa, 
+                       COALESCE(v.fecha_visita, CURRENT_DATE) AS fecha_visita, 
+                       COALESCE(v.auditor, '') AS auditor, 
+                       COALESCE(v.puntaje, 0) AS puntaje, 
+                       COALESCE(v.observaciones, '') AS observaciones, 
+                       v.checklist_seguridad, v.created_at, v.empresa_id
                 FROM visitas v
-                JOIN empresas e ON v.empresa_id = e.id
+                LEFT JOIN empresas e ON v.empresa_id = e.id
                 ORDER BY v.fecha_visita DESC, v.id DESC
             """
             df = pd.read_sql_query(query, conn)
@@ -442,22 +525,30 @@ def get_evidencias_df(visita_id=None):
         conn = get_connection()
         if visita_id:
             query = """
-                SELECT ev.id, ev.visita_id, e.nombre AS empresa, v.fecha_visita, 
-                       ev.descripcion, ev.foto_url, ev.created_at
+                SELECT ev.id, ev.visita_id, 
+                       COALESCE(e.nombre, 'Sin Empresa') AS empresa, 
+                       COALESCE(v.fecha_visita, CURRENT_DATE) AS fecha_visita, 
+                       COALESCE(ev.descripcion, '') AS descripcion, 
+                       COALESCE(ev.foto_url, '') AS foto_url, 
+                       ev.created_at
                 FROM evidencias ev
-                JOIN visitas v ON ev.visita_id = v.id
-                JOIN empresas e ON v.empresa_id = e.id
+                LEFT JOIN visitas v ON ev.visita_id = v.id
+                LEFT JOIN empresas e ON v.empresa_id = e.id
                 WHERE ev.visita_id = %s
                 ORDER BY ev.id DESC
             """
             df = pd.read_sql_query(query, conn, params=(visita_id,))
         else:
             query = """
-                SELECT ev.id, ev.visita_id, e.nombre AS empresa, v.fecha_visita, 
-                       ev.descripcion, ev.foto_url, ev.created_at
+                SELECT ev.id, ev.visita_id, 
+                       COALESCE(e.nombre, 'Sin Empresa') AS empresa, 
+                       COALESCE(v.fecha_visita, CURRENT_DATE) AS fecha_visita, 
+                       COALESCE(ev.descripcion, '') AS descripcion, 
+                       COALESCE(ev.foto_url, '') AS foto_url, 
+                       ev.created_at
                 FROM evidencias ev
-                JOIN visitas v ON ev.visita_id = v.id
-                JOIN empresas e ON v.empresa_id = e.id
+                LEFT JOIN visitas v ON ev.visita_id = v.id
+                LEFT JOIN empresas e ON v.empresa_id = e.id
                 ORDER BY ev.id DESC
             """
             df = pd.read_sql_query(query, conn)
@@ -473,7 +564,6 @@ def get_evidencias_df(visita_id=None):
 def generar_excel_completo():
     """Genera un archivo Excel en memoria con 5 hojas estilizadas profesionalmente."""
     wb = openpyxl.Workbook()
-    # Eliminar hoja por defecto
     default_sheet = wb.active
     wb.remove(default_sheet)
 
@@ -529,7 +619,6 @@ def generar_excel_completo():
             r['auditor'] or "", puntaje, porcentaje, r['observaciones'] or ""
         ]
         
-        # Desglosar respuestas checklist
         chk = r['checklist_seguridad']
         if isinstance(chk, str):
             try:
@@ -572,7 +661,6 @@ def generar_excel_completo():
     # Aplicar estilos y anchos de columna en todas las hojas
     for ws in [ws1, ws2, ws3, ws4, ws5]:
         ws.views.sheetView[0].showGridLines = True
-        # Estilar header
         if ws != ws5:
             for cell in ws[1]:
                 cell.fill = header_fill
@@ -589,7 +677,6 @@ def generar_excel_completo():
             ws["A4"].font = header_font
             ws["B4"].font = header_font
 
-        # Autoajuste de anchos de columna
         for col in ws.columns:
             max_len = 0
             col_letter = get_column_letter(col[0].column)
@@ -605,11 +692,11 @@ def generar_excel_completo():
     return buffer.getvalue()
 
 # ==============================================================================
-# INICIALIZACIÓN DE LA APLICACIÓN
+# INICIALIZACIÓN Y MENÚ
 # ==============================================================================
 init_db()
 
-# Menú lateral de navegación
+# Menú lateral
 st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=70)
 st.sidebar.title("Serviphar GRC Lite")
 st.sidebar.caption("Plataforma de Auditoría y Cumplimiento Legal")
@@ -627,6 +714,11 @@ menu_opcion = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
+if st.sidebar.button("🔄 Reparar / Sincronizar Base de Datos"):
+    init_db()
+    st.sidebar.success("Estructura de base de datos sincronizada.")
+    st.rerun()
+
 st.sidebar.info("💡 **Tip Terreno:** Todos los cambios se guardan directamente en Neon PostgreSQL y quedan sincronizados en tiempo real.")
 
 # ==============================================================================
@@ -639,7 +731,6 @@ if menu_opcion == "🏠 Dashboard":
     df_trat = get_tratamientos_df()
     df_vis = get_visitas_df()
     
-    # 4 Tarjetas de Métricas
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.metric("🏢 Total Empresas", len(df_emp))
@@ -675,7 +766,6 @@ if menu_opcion == "🏠 Dashboard":
         else:
             st.info("No hay tratamientos registrados para generar gráficos.")
 
-    # Resumen de Cumplimiento en Auditorías
     if not df_vis.empty:
         st.markdown("---")
         st.subheader("🛡️ Últimas Auditorías de Seguridad y Puntajes")
@@ -691,7 +781,6 @@ elif menu_opcion == "🏢 Empresas":
 
     tab_lista, tab_crear = st.tabs(["📋 Listado de Empresas", "➕ Registrar Nueva Empresa"])
 
-    # Submódulo: Crear Empresa
     with tab_crear:
         st.subheader("Registrar Nueva Empresa")
         with st.form("form_crear_empresa", clear_on_submit=True):
@@ -717,7 +806,6 @@ elif menu_opcion == "🏢 Empresas":
                     else:
                         st.error(f"❌ {msg}")
 
-    # Submódulo: Listado y Edición/Eliminación
     with tab_lista:
         buscador = st.text_input("🔍 Buscar empresa por Nombre o RUT:", placeholder="Escribe para filtrar...")
         df_empresas = get_empresas_df(search_term=buscador)
@@ -735,7 +823,6 @@ elif menu_opcion == "🏢 Empresas":
             st.markdown("---")
             st.subheader("⚙️ Acciones por Empresa")
             
-            # Selector para editar o eliminar
             empresa_opciones = {f"{r['id']} - {r['nombre']} ({r['rut']})": r['id'] for _, r in df_empresas.iterrows()}
             seleccion_empresa_str = st.selectbox("Selecciona una empresa para gestionar:", list(empresa_opciones.keys()))
             empresa_sel_id = empresa_opciones[seleccion_empresa_str]
@@ -788,7 +875,6 @@ elif menu_opcion == "📋 Tratamientos (ROPA)":
 
         empresa_map = {f"{r['id']} - {r['nombre']} ({r['rut']})": r['id'] for _, r in df_empresas.iterrows()}
 
-        # Submódulo: Crear Tratamiento
         with tab_trat_crear:
             st.subheader("Nuevo Tratamiento de Datos")
             with st.form("form_crear_tratamiento", clear_on_submit=True):
@@ -821,7 +907,6 @@ elif menu_opcion == "📋 Tratamientos (ROPA)":
                         else:
                             st.error(f"❌ {msg}")
 
-        # Submódulo: Listado y Filtros
         with tab_trat_lista:
             col_f1, col_f2 = st.columns([2, 2])
             with col_f1:
@@ -855,7 +940,6 @@ elif menu_opcion == "📋 Tratamientos (ROPA)":
                     st.markdown(f"**Encargados:** {t_row['encargados'] or 'No especificado'}")
                     st.markdown(f"**Transferencias Internacionales:** {t_row['transferencias'] or 'No especificado'}")
 
-                    # Botón para eliminar
                     if st.button("🗑️ Eliminar este Tratamiento", key=f"del_trat_{trat_sel_id}", type="secondary"):
                         ok, msg = delete_tratamiento(trat_sel_id)
                         if ok:
@@ -877,7 +961,6 @@ elif menu_opcion == "🔍 Visitas / Auditorías":
         tab_vis_lista, tab_vis_crear = st.tabs(["📋 Historial de Auditorías", "➕ Nueva Auditoría en Terreno"])
         empresa_map = {f"{r['id']} - {r['nombre']} ({r['rut']})": r['id'] for _, r in df_empresas.iterrows()}
 
-        # Submódulo: Crear Visita con Checklist
         with tab_vis_crear:
             st.subheader("Formulario de Auditoría en Terreno")
             
@@ -910,7 +993,6 @@ elif menu_opcion == "🔍 Visitas / Auditorías":
                 btn_guardar_visita = st.form_submit_button("💾 Guardar Auditoría", use_container_width=True, type="primary")
 
                 if btn_guardar_visita:
-                    # Cálculo de puntaje
                     puntaje = sum(1 for v in respuestas_checklist.values() if v == "Sí")
                     eid = empresa_map[vis_empresa_key]
                     ok, msg = add_visita(eid, vis_fecha, vis_auditor, respuestas_checklist, puntaje, vis_observaciones)
@@ -921,7 +1003,6 @@ elif menu_opcion == "🔍 Visitas / Auditorías":
                     else:
                         st.error(f"❌ {msg}")
 
-        # Submódulo: Listado de Visitas
         with tab_vis_lista:
             filtro_vis_emp = st.selectbox("Filtrar auditorías por empresa:", ["Todas las empresas"] + list(empresa_map.keys()), key="filtro_vis_emp")
             eid_vis_filtro = empresa_map[filtro_vis_emp] if filtro_vis_emp != "Todas las empresas" else None
@@ -994,7 +1075,6 @@ elif menu_opcion == "📸 Evidencias":
         tab_ev_lista, tab_ev_crear = st.tabs(["📋 Evidencias Registradas", "➕ Adjuntar Nueva Evidencia"])
         visita_map = {f"Auditoría #{r['id']} - {r['empresa']} ({r['fecha_visita']})": r['id'] for _, r in df_visitas.iterrows()}
 
-        # Submódulo: Crear Evidencia
         with tab_ev_crear:
             st.subheader("Adjuntar Evidencia a una Auditoría")
             with st.form("form_crear_evidencia", clear_on_submit=True):
@@ -1015,7 +1095,6 @@ elif menu_opcion == "📸 Evidencias":
                         else:
                             st.error(f"❌ {msg}")
 
-        # Submódulo: Listado de Evidencias
         with tab_ev_lista:
             filtro_ev_vis = st.selectbox("Filtrar por Auditoría:", ["Todas las auditorías"] + list(visita_map.keys()))
             vid_filtro = visita_map[filtro_ev_vis] if filtro_ev_vis != "Todas las auditorías" else None
