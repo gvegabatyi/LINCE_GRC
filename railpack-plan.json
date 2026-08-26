@@ -1,0 +1,8 @@
+{
+  "$schema": "https://railpack.com/schema/railpack-plan.json",
+  "setup": {
+    "packages": {
+      "python": "3.11"
+    }
+  }
+}
