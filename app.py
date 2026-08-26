@@ -10,10 +10,23 @@ from psycopg2 import sql
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_conn():
-    if not DATABASE_URL:
-        st.error("⚠️ La variable de entorno DATABASE_URL no está configurada. Por favor configúrala en el entorno.")
+    if not DATABASE_URL or not DATABASE_URL.strip():
+        st.error("⚠️ La variable de entorno DATABASE_URL no está configurada o está vacía. Por favor configúrala en el panel de Render (Environment Variables).")
         st.stop()
-    return psycopg2.connect(DATABASE_URL)
+    
+    url = DATABASE_URL.strip()
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+        
+    try:
+        return psycopg2.connect(dsn=url)
+    except psycopg2.Error as e:
+        st.error(f"⚠️ Error de conexión a PostgreSQL: {e}")
+        st.info("Verifica que la variable DATABASE_URL tenga el formato: postgresql://usuario:contraseña@host:puerto/base_de_datos")
+        st.stop()
+    except Exception as e:
+        st.error(f"⚠️ Error inesperado al conectar con la base de datos: {e}")
+        st.stop()
 
 def init_db():
     try:
