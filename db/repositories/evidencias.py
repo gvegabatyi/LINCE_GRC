@@ -69,7 +69,11 @@ def delete_evidencia(evidencia_id: int) -> tuple[bool, str]:
 # LECTURA
 # ==============================================================================
 
-def get_evidencias_df(visita_id: int = None, evaluacion_id: int = None) -> pd.DataFrame:
+def get_evidencias_df(
+    visita_id: int = None,
+    evaluacion_id: int = None,
+    empresa_id: int = None,
+) -> pd.DataFrame:
     conn = None
     try:
         conn = get_connection()
@@ -97,6 +101,9 @@ def get_evidencias_df(visita_id: int = None, evaluacion_id: int = None) -> pd.Da
         if evaluacion_id:
             conditions.append("ev.evaluacion_id = %s")
             params.append(evaluacion_id)
+        if empresa_id:
+            conditions.append("(v.empresa_id = %s OR eval.empresa_id = %s)")
+            params.extend([empresa_id, empresa_id])
 
         if conditions:
             base_query += " WHERE " + " AND ".join(conditions)
