@@ -1,5 +1,5 @@
 """
-Serviphar GRC Lite - Plataforma Web de Auditoría y Cumplimiento GRC.
+Lince GRC - Gobierno, Riesgo y Cumplimiento.
 Punto de entrada principal (Streamlit Router).
 
 Configura la página, inicializa/migra la base de datos de forma segura
@@ -14,6 +14,7 @@ from modules import (
     dashboard,
     empresas,
     evaluaciones,
+    mpi_gobernanza,
     tratamientos,
     visitas,
     evidencias,
@@ -24,7 +25,7 @@ from modules import (
 # CONFIGURACIÓN DE PÁGINA STREAMLIT
 # ==============================================================================
 st.set_page_config(
-    page_title="Serviphar GRC Lite",
+    page_title="Lince GRC",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -50,15 +51,15 @@ st.markdown("""
 # ==============================================================================
 # INICIALIZACIÓN Y CONTROL DE BASE DE DATOS
 # ==============================================================================
-# Ejecuta validaciones y migraciones idempotentes de Fase 1
+# Ejecuta validaciones y migraciones idempotentes de Fase 1 y Fase 2A
 init_db()
 
 # ==============================================================================
 # MENÚ LATERAL Y NAVEGACIÓN
 # ==============================================================================
 st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=70)
-st.sidebar.title("Serviphar GRC Lite")
-st.sidebar.caption("Plataforma de Auditoría y Cumplimiento Legal")
+st.sidebar.title("Lince GRC")
+st.sidebar.caption("Gobierno, Riesgo y Cumplimiento")
 
 menu_opcion = st.sidebar.radio(
     "Menú Principal",
@@ -66,7 +67,8 @@ menu_opcion = st.sidebar.radio(
         "🏠 Dashboard",
         "🏢 Empresas",
         "📁 Evaluaciones GRC",
-        "📋 Tratamientos (ROPA)",
+        "🛡️ Perfil MPI y Delegado",
+        "📋 Tratamientos (RAT)",
         "🔍 Visitas / Auditorías",
         "📸 Evidencias",
         "📊 Exportar Informe",
@@ -93,7 +95,9 @@ elif menu_opcion == "🏢 Empresas":
     empresas.render()
 elif menu_opcion == "📁 Evaluaciones GRC":
     evaluaciones.render()
-elif menu_opcion == "📋 Tratamientos (ROPA)":
+elif menu_opcion == "🛡️ Perfil MPI y Delegado":
+    mpi_gobernanza.render()
+elif menu_opcion == "📋 Tratamientos (RAT)":
     tratamientos.render()
 elif menu_opcion == "🔍 Visitas / Auditorías":
     visitas.render()

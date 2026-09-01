@@ -1,14 +1,17 @@
 """
 Módulo Exportar Informe — Generación de libro Excel consolidado.
-Fase 1: mantiene las 5 hojas originales sin regresiones y añade la hoja
-EVALUACIONES como sexta hoja en un bloque try/except independiente para
-que un error en esa hoja no impida generar las 5 existentes.
+Fase 2A: mantiene todas las hojas originales y añade de forma segura:
+  - PERFIL_MPI
+  - DELEGADO_DPD
+  - RAT_DECRETO_662
+  - REFERENCIAS_NORMATIVAS
 """
 
 import streamlit as st
 import pandas as pd
 import io
 from datetime import datetime
+import json
 
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -19,9 +22,18 @@ from db.repositories.evaluaciones import get_evaluaciones_df
 from db.repositories.tratamientos import get_tratamientos_df
 from db.repositories.visitas import get_visitas_df
 from db.repositories.evidencias import get_evidencias_df
-from utils.constants import CHECKLIST_PREGUNTAS, ESTADO_EVALUACION_DISPLAY
-from services.checklist_service import calcular_porcentaje, nivel_cumplimiento
-import json
+from db.repositories.mpi_gobernanza import (
+    get_perfiles_df,
+    get_delegados_df,
+    get_referencias_normativas_df,
+)
+from utils.constants import (
+    CHECKLIST_PREGUNTAS,
+    ESTADO_EVALUACION_DISPLAY,
+    ESTADOS_MPI_INTERNOS_MAP,
+    ESTADOS_MPI_OFICIALES_MAP,
+)
+from services.checklist_service import calcular_porcentaje
 
 
 # ==============================================================================
@@ -67,9 +79,7 @@ def _format_sheet(ws, header_fill, header_font, thin_border, is_summary=False):
 # ==============================================================================
 def generar_excel_completo() -> bytes:
     """
-    Genera un archivo Excel en memoria con hasta 6 hojas.
-    Las 5 hojas originales siempre se generan.
-    La hoja EVALUACIONES se añade en un bloque try/except independiente.
+    Genera un archivo Excel consolidado en memoria con hojas formateadas.
     Retorna bytes del archivo .xlsx.
     """
     header_fill, header_font, title_font, bold_font, regular_font, thin_border = _estilos()
@@ -95,16 +105,16 @@ def generar_excel_completo() -> bytes:
     ws2 = wb.create_sheet(title="TRATAMIENTOS")
     df_trat = get_tratamientos_df()
     ws2.append([
-        "ID", "Empresa", "RUT Empresa", "Tratamiento", "Descripción",
-        "Base Legal", "Datos Personales", "Responsables", "Encargados",
-        "Transferencias", "Evaluación", "Fecha Registro",
+        "ID", "Empresa", "RUT Empresa", "Tratamiento", "Finalidades (v)",
+        "Base Licitud (vii)", "Tipos de Datos (i)", "Titulares (iv)", "Evaluación", "Fecha Registro",
     ])
     for _, r in df_trat.iterrows():
         ws2.append([
             r["id"], r["empresa"], r["rut_empresa"], r["nombre_tratamiento"],
-            r.get("descripcion") or "", r.get("base_legal") or "",
-            r.get("datos_personales") or "", r.get("responsables") or "",
-            r.get("encargados") or "", r.get("transferencias") or "",
+            r.get("rat_finalidades") or r.get("descripcion") or "",
+            r.get("rat_base_licitud_interes_legitimo") or r.get("base_legal") or "",
+            r.get("rat_tipo_datos_sensibles") or r.get("datos_personales") or "",
+            r.get("rat_categorias_titulares") or "",
             r.get("evaluacion_nombre") or "",
             str(r["created_at"])[:19] if pd.notnull(r.get("created_at")) else "",
         ])
@@ -159,12 +169,13 @@ def generar_excel_completo() -> bytes:
 
     # ── Hoja 5: RESUMEN ───────────────────────────────────────────────────────
     ws5 = wb.create_sheet(title="RESUMEN")
-    ws5.append(["INFORME CONSOLIDADO DE CUMPLIMIENTO Y AUDITORÍA GRC"])
+    ws5.append(["Lince GRC — Informe de Evaluación"])
+    ws5.append(["Gobierno, Riesgo y Cumplimiento (Foco: Ley N° 21.719 / Decreto N° 662)"])
     ws5.append([f"Fecha de Generación: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"])
     ws5.append([])
     ws5.append(["Métrica General", "Valor"])
     ws5.append(["Total de Empresas Registradas", len(df_emp)])
-    ws5.append(["Total de Tratamientos (ROPA)", len(df_trat)])
+    ws5.append(["Total de Tratamientos (RAT)", len(df_trat)])
     ws5.append(["Total de Visitas de Auditoría", len(df_vis)])
     ws5.append(["Total de Evidencias Adjuntas", len(df_ev)])
 
@@ -172,10 +183,10 @@ def generar_excel_completo() -> bytes:
     ws5.append(["Promedio Puntaje Seguridad (/15)", f"{promedio:.2f}"])
     ws5.append(["% Promedio Cumplimiento", f"{calcular_porcentaje(promedio):.1f}%"])
 
-    # Estilos hoja resumen
     ws5["A1"].font = title_font
-    ws5["A2"].font = regular_font
-    for cell in [ws5["A4"], ws5["B4"]]:
+    ws5["A2"].font = bold_font
+    ws5["A3"].font = regular_font
+    for cell in [ws5["A5"], ws5["B5"]]:
         cell.fill = header_fill
         cell.font = header_font
     for col in ws5.columns:
@@ -185,7 +196,7 @@ def generar_excel_completo() -> bytes:
         for cell in col:
             cell.border = thin_border
 
-    # ── Hoja 6: EVALUACIONES (protegida con try/except) ───────────────────────
+    # ── Hoja 6: EVALUACIONES ──────────────────────────────────────────────────
     try:
         df_eval = get_evaluaciones_df()
         ws6 = wb.create_sheet(title="EVALUACIONES")
@@ -214,7 +225,114 @@ def generar_excel_completo() -> bytes:
             ])
         _format_sheet(ws6, header_fill, header_font, thin_border)
     except Exception:
-        # Si la hoja de evaluaciones falla, el resto del Excel ya está generado.
+        pass
+
+    # ==========================================================================
+    # HOJAS NUEVAS FASE 2A: DECRETO N° 662
+    # ==========================================================================
+
+    # ── Hoja 7: PERFIL_MPI ────────────────────────────────────────────────────
+    try:
+        df_perf = get_perfiles_df()
+        ws7 = wb.create_sheet(title="PERFIL_MPI")
+        ws7.append([
+            "ID", "Empresa", "RUT Empresa", "Representante Legal (Art. 3 a)", "RUT Rep. Legal",
+            "Fecha Adopción", "Versión", "Estado Interno", "Estado Registral Oficial",
+            "Entidad Certificadora (Art. 15)", "N° Certificado", "Fecha Certificación",
+            "Fecha Vencimiento", "N° Registro Agencia (Art. 17)", "Activo",
+        ])
+        for _, r in df_perf.iterrows():
+            ws7.append([
+                r["id"], r["empresa"], r["rut_empresa"],
+                r["representante_legal_nombre"], r["representante_legal_rut"],
+                str(r["fecha_adopcion_modelo"]) if pd.notnull(r.get("fecha_adopcion_modelo")) else "",
+                r.get("version_modelo") or "1.0",
+                ESTADOS_MPI_INTERNOS_MAP.get(r.get("estado_implementacion", ""), r.get("estado_implementacion", "")),
+                ESTADOS_MPI_OFICIALES_MAP.get(r.get("estado_certificacion_oficial", ""), r.get("estado_certificacion_oficial", "")),
+                r.get("entidad_certificadora") or "",
+                r.get("nro_certificado") or "",
+                str(r["fecha_certificacion"]) if pd.notnull(r.get("fecha_certificacion")) else "",
+                str(r["fecha_vencimiento_certificacion"]) if pd.notnull(r.get("fecha_vencimiento_certificacion")) else "",
+                r.get("nro_registro_agencia") or "",
+                "Sí" if r.get("activo") else "No",
+            ])
+        _format_sheet(ws7, header_fill, header_font, thin_border)
+    except Exception:
+        pass
+
+    # ── Hoja 8: DELEGADO_DPD ──────────────────────────────────────────────────
+    try:
+        df_del = get_delegados_df()
+        ws8 = wb.create_sheet(title="DELEGADO_DPD")
+        ws8.append([
+            "ID", "Empresa", "Nombre Delegado (Art. 3 b)", "Correo Contacto Público (Art. 11)",
+            "Teléfono", "Tipo Vínculo (Art. 7)", "Prestador Jurídico", "Cargo Interno",
+            "Autoridad Designación (Art. 8)", "Fecha Designación", "Autonomía Declarada", "Activo",
+        ])
+        for _, r in df_del.iterrows():
+            ws8.append([
+                r["id"], r["empresa"], r["nombre_completo"],
+                r["email_contacto_publico"], r.get("telefono_contacto") or "",
+                r.get("tipo_vinculo") or "dependiente",
+                r.get("persona_juridica_prestadora") or "",
+                r.get("cargo_interno") or "",
+                r.get("autoridad_designacion") or "Directorio",
+                str(r["fecha_designacion"]) if pd.notnull(r.get("fecha_designacion")) else "",
+                "Sí" if r.get("declaracion_autonomia") else "No",
+                "Sí" if r.get("activo") else "No",
+            ])
+        _format_sheet(ws8, header_fill, header_font, thin_border)
+    except Exception:
+        pass
+
+    # ── Hoja 9: RAT_DECRETO_662 (11 Numerales Art. 3 d) ───────────────────────
+    try:
+        ws9 = wb.create_sheet(title="RAT_DECRETO_662")
+        ws9.append([
+            "ID", "Empresa", "Tratamiento",
+            "i. Tipos de Datos y Sensibles",
+            "ii. Ámbito Territorial",
+            "iii. Bases de Datos Administradas",
+            "iv. Categorías de Titulares",
+            "v. Finalidades del Tratamiento",
+            "vi. Fuente de Datos / Acceso Público",
+            "vii. Base Licitud / Interés Legítimo",
+            "viii. Destinatarios / Cesiones",
+            "ix. Transferencias Internacionales (Art. 27)",
+            "x. Plazos / Supresión",
+            "xi. Decisiones Automatizadas / Perfilamiento",
+        ])
+        for _, r in df_trat.iterrows():
+            ws9.append([
+                r["id"], r["empresa"], r["nombre_tratamiento"],
+                r.get("rat_tipo_datos_sensibles") or "",
+                r.get("rat_ambito_territorial") or "",
+                r.get("rat_bases_datos_administradas") or "",
+                r.get("rat_categorias_titulares") or "",
+                r.get("rat_finalidades") or "",
+                r.get("rat_fuente_datos_acceso_publico") or "",
+                r.get("rat_base_licitud_interes_legitimo") or "",
+                r.get("rat_destinatarios_cesiones") or "",
+                r.get("rat_transferencias_internacionales_art27") or "",
+                r.get("rat_plazo_condicion_supresion") or "",
+                r.get("rat_decisiones_automatizadas_perfilamiento") or "",
+            ])
+        _format_sheet(ws9, header_fill, header_font, thin_border)
+    except Exception:
+        pass
+
+    # ── Hoja 10: REFERENCIAS_NORMATIVAS ───────────────────────────────────────
+    try:
+        df_norm = get_referencias_normativas_df()
+        ws10 = wb.create_sheet(title="REFERENCIAS_NORMATIVAS")
+        ws10.append(["ID", "Fuente", "Artículo", "Materia", "Criterio Normativo"])
+        for _, r in df_norm.iterrows():
+            ws10.append([
+                r["id"], r.get("nombre_fuente") or "Decreto N° 662",
+                r["articulo"], r["materia"], r["descripcion_criterio"],
+            ])
+        _format_sheet(ws10, header_fill, header_font, thin_border)
+    except Exception:
         pass
 
     buffer = io.BytesIO()
@@ -230,12 +348,19 @@ def render() -> None:
     st.write("Genera un libro Excel consolidado (`.xlsx`) con hojas formateadas profesionalmente:")
 
     st.markdown("""
-    - **Hoja 1 — EMPRESAS:** Catálogo completo de empresas del grupo.
-    - **Hoja 2 — TRATAMIENTOS:** Registro de Actividades de Tratamiento (ROPA).
-    - **Hoja 3 — VISITAS:** Auditorías con puntaje, tipo y desglose del checklist.
+    **Hojas de Gestión General:**
+    - **Hoja 1 — EMPRESAS:** Catálogo de empresas del grupo.
+    - **Hoja 2 — TRATAMIENTOS:** Resumen ejecutivo de tratamientos.
+    - **Hoja 3 — VISITAS:** Auditorías con puntaje, tipo y desglose del checklist de seguridad.
     - **Hoja 4 — EVIDENCIAS:** Registro y enlaces de evidencias levantadas en terreno.
-    - **Hoja 5 — RESUMEN:** Métricas ejecutivas, porcentajes de cumplimiento y fecha de emisión.
-    - **Hoja 6 — EVALUACIONES:** Proyectos GRC registrados por empresa *(nueva en Fase 1)*.
+    - **Hoja 5 — RESUMEN:** Métricas ejecutivas y fecha de emisión.
+    - **Hoja 6 — EVALUACIONES:** Proyectos GRC por empresa y período.
+
+    **Hojas del Modelo de Prevención de Infracciones (Fase 2A — Decreto N° 662):**
+    - **Hoja 7 — PERFIL_MPI:** Responsable, representante legal, estados interno y oficial *(Art. 3 a; Arts. 15 y 17)*.
+    - **Hoja 8 — DELEGADO_DPD:** Delegado DPD, canal de contacto accesible e idoneidad *(Arts. 3 b, c; Arts. 6-13)*.
+    - **Hoja 9 — RAT_DECRETO_662:** Registro de Actividades con los **11 numerales taxativos** *(Art. 3 d)*.
+    - **Hoja 10 — REFERENCIAS_NORMATIVAS:** Citas y criterios del Decreto N° 662.
     """)
 
     st.markdown("---")
@@ -247,13 +372,13 @@ def render() -> None:
                 try:
                     excel_bytes = generar_excel_completo()
                     st.session_state["excel_informe"] = excel_bytes
-                    st.success("✅ ¡Informe generado con éxito!")
+                    st.success("✅ ¡Informe consolidado generado con éxito!")
                 except Exception as exc:
                     st.error(f"Error al generar el informe ({type(exc).__name__}). Intente nuevamente.")
 
     with col_exp2:
         if "excel_informe" in st.session_state:
-            nombre_archivo = f"Serviphar_GRC_Informe_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            nombre_archivo = f"Lince_GRC_Informe_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
             st.download_button(
                 label="📥 Descargar Informe Completo Excel (.xlsx)",
                 data=st.session_state["excel_informe"],

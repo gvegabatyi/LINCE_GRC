@@ -1,10 +1,11 @@
 """
-Constantes globales de la aplicación Serviphar GRC Lite.
-Centraliza listas de valores, textos de checklist y etiquetas de semáforo.
+Constantes globales de la aplicación Lince GRC.
+Centraliza listas de valores, textos de checklist, etiquetas de semáforo
+y referencias normativas del Decreto N° 662 (Ministerio de Hacienda).
 """
 
 # ==============================================================================
-# CHECKLIST DE SEGURIDAD (15 PREGUNTAS — Mantenidas sin cambios desde Fase anterior)
+# CHECKLIST DE SEGURIDAD (15 PREGUNTAS — Mantenidas sin cambios desde Fase 1)
 # ==============================================================================
 CHECKLIST_PREGUNTAS = [
     "1. ¿Cuenta con política de seguridad de la información documentada?",
@@ -27,22 +28,145 @@ CHECKLIST_PREGUNTAS = [
 CHECKLIST_MAX_PUNTAJE = len(CHECKLIST_PREGUNTAS)
 
 # ==============================================================================
-# TRATAMIENTOS / ROPA
+# FASE 2A: MODELO DE PREVENCIÓN DE INFRACCIONES (MPI) — DECRETO N° 662
 # ==============================================================================
+
+# Estados Internos de Implementación (Declarativos internos)
+ESTADOS_MPI_INTERNOS = [
+    ("preparacion", "🔵 En Preparación"),
+    ("implementado_internamente", "🟡 Implementado Internamente"),
+    ("en_revision_interna", "🟠 En Revisión Interna"),
+]
+
+ESTADOS_MPI_INTERNOS_MAP = dict(ESTADOS_MPI_INTERNOS)
+
+# Estados Oficiales Registrales (Exigen respaldo documental y de la Agencia)
+ESTADOS_MPI_OFICIALES = [
+    ("sin_solicitud", "⚪ Sin Solicitud de Certificación"),
+    ("solicitud_en_tramite", "⏳ Solicitud en Trámite ante la Agencia"),
+    ("certificado_agencia", "🛡️ Certificado por la Agencia (Art. 15)"),
+    ("inscrito_registro_agencia", "📋 Inscrito en Registro Nacional (Art. 17)"),
+    ("vencido", "⚠️ Certificado Vencido"),
+    ("revocado", "❌ Certificado Revocado por la Agencia (Art. 20)"),
+]
+
+ESTADOS_MPI_OFICIALES_MAP = dict(ESTADOS_MPI_OFICIALES)
+
+# Tipos de Vínculo del Delegado de Protección de Datos (Art. 7)
+TIPOS_VINCULO_DELEGADO = [
+    ("dependiente", "Trabajador Dependiente (Contrato de Trabajo)"),
+    ("prestacion_servicios_natural", "Prestación de Servicios (Persona Natural)"),
+    ("prestacion_servicios_juridica", "Prestación de Servicios (Persona Jurídica)"),
+]
+
+# Autoridad que designa al Delegado (Art. 8)
+AUTORIDADES_DESIGNACION_DPD = [
+    "Directorio",
+    "Junta de Accionistas",
+    "Gerencia General",
+    "Máxima Autoridad Directiva / Administrativa",
+    "Administrador Único",
+]
+
+# ==============================================================================
+# FASE 2A: REGISTRO DE ACTIVIDADES DE TRATAMIENTO (RAT) — ART. 3 LETRA D)
+# 11 Numerales Normativos Taxativos (Decreto N° 662)
+# ==============================================================================
+RAT_NUMERALES_INFO = {
+    "i": {
+        "numeral": "i",
+        "campo_db": "rat_tipo_datos_sensibles",
+        "label": "i. Tipo de datos personales y categorías especiales / sensibles",
+        "referencia": "Decreto N° 662, Art. 3 letra d) num. i",
+        "placeholder": "Ej. Datos identificatorios, de contacto, laborales, remuneraciones, salud, biométricos...",
+    },
+    "ii": {
+        "numeral": "ii",
+        "campo_db": "rat_ambito_territorial",
+        "label": "ii. Ámbito territorial del tratamiento",
+        "referencia": "Decreto N° 662, Art. 3 letra d) num. ii",
+        "placeholder": "Ej. Nacional (todo Chile), Regional (Región Metropolitana), Transfronterizo...",
+    },
+    "iii": {
+        "numeral": "iii",
+        "campo_db": "rat_bases_datos_administradas",
+        "label": "iii. Categorías, clases o tipos de bases de datos administradas",
+        "referencia": "Decreto N° 662, Art. 3 letra d) num. iii",
+        "placeholder": "Ej. Base de datos de nómina, ERP corporativo, CRM de clientes, repositorio documental...",
+    },
+    "iv": {
+        "numeral": "iv",
+        "campo_db": "rat_categorias_titulares",
+        "label": "iv. Categorías de titulares de datos",
+        "referencia": "Decreto N° 662, Art. 3 letra d) num. iv",
+        "placeholder": "Ej. Trabajadores dependientes, postulantes a empleo, clientes personas naturales, proveedores...",
+    },
+    "v": {
+        "numeral": "v",
+        "campo_db": "rat_finalidades",
+        "label": "v. Fines de las operaciones de tratamiento",
+        "referencia": "Decreto N° 662, Art. 3 letra d) num. v",
+        "placeholder": "Ej. Pago de remuneraciones y cotizaciones previsionales, gestión de contratos comerciales...",
+    },
+    "vi": {
+        "numeral": "vi",
+        "campo_db": "rat_fuente_datos_acceso_publico",
+        "label": "vi. Fuente de procedencia y si provienen de fuentes de acceso público",
+        "referencia": "Decreto N° 662, Art. 3 letra d) num. vi",
+        "placeholder": "Ej. Recolectados directamente del titular; Registro de Comercio (fuente pública)...",
+    },
+    "vii": {
+        "numeral": "vii",
+        "campo_db": "rat_base_licitud_interes_legitimo",
+        "label": "vii. Base de licitud e interés legítimo cuando corresponda",
+        "referencia": "Decreto N° 662, Art. 3 letra d) num. vii",
+        "placeholder": "Ej. Ejecución de contrato de trabajo (Ley 19.628 / 21.719); Cumplimiento de obligación legal...",
+    },
+    "viii": {
+        "numeral": "viii",
+        "campo_db": "rat_destinatarios_cesiones",
+        "label": "viii. Categorías de terceros destinatarios, incluidos terceros países u organizaciones",
+        "referencia": "Decreto N° 662, Art. 3 letra d) num. viii",
+        "placeholder": "Ej. Instituciones previsionales (AFP, Fonasa), Servicio de Impuestos Internos, bancos...",
+    },
+    "ix": {
+        "numeral": "ix",
+        "campo_db": "rat_transferencias_internacionales_art27",
+        "label": "ix. Transferencias internacionales: país u organización y medio para cumplir el art. 27",
+        "referencia": "Decreto N° 662, Art. 3 letra d) num. ix",
+        "placeholder": "Ej. No aplica / Proveedor Cloud en EE.UU. con cláusulas contractuales tipo (Art. 27 Ley 19.628)...",
+    },
+    "x": {
+        "numeral": "x",
+        "campo_db": "rat_plazo_condicion_supresion",
+        "label": "x. Plazos o condiciones de supresión de los datos",
+        "referencia": "Decreto N° 662, Art. 3 letra d) num. x",
+        "placeholder": "Ej. 5 años desde el término de la relación laboral (plazo prescripción laboral y tributaria)...",
+    },
+    "xi": {
+        "numeral": "xi",
+        "campo_db": "rat_decisiones_automatizadas_perfilamiento",
+        "label": "xi. Decisiones automatizadas / perfilamiento: lógica significativa y consecuencias",
+        "referencia": "Decreto N° 662, Art. 3 letra d) num. xi",
+        "placeholder": "Ej. No se realizan decisiones automatizadas ni perfilamiento / Algoritmo de scoring con supervisión humana...",
+    },
+}
+
+# Bases Legales Estándar
 BASES_LEGALES = [
-    "Consentimiento",
+    "Consentimiento del Titular",
     "Ejecución de Contrato",
     "Obligación Legal",
-    "Interés Legítimo",
-    "Interés Público",
+    "Interés Legítimo del Responsable o Tercero",
+    "Interés Público o Ejercicio de Funciones Públicas",
     "Protección de Intereses Vitales",
 ]
 
 TRANSFERENCIAS_OPCIONES = [
-    "No aplica",
-    "Sí - Servidores Cloud (EE.UU.)",
-    "Sí - Proveedores en UE",
-    "Sí - Otros países",
+    "No aplica (Tratamiento exclusivamente nacional)",
+    "Sí - Servidores Cloud (EE.UU.) con Cláusulas Contractuales",
+    "Sí - Proveedores en UE con Nivel Adecuado",
+    "Sí - Otros países con Garantías Apropiadas (Art. 27)",
 ]
 
 # ==============================================================================
@@ -56,6 +180,7 @@ TIPOS_VISITA = [
     "Entrevista TI",
     "Entrevista Gerencia",
     "Revisión Documental",
+    "Auditoría de Cumplimiento MPI",
     "Otro",
 ]
 
@@ -64,8 +189,8 @@ TIPOS_VISITA = [
 # ==============================================================================
 TIPOS_EVALUACION = [
     "Diagnóstico Inicial",
-    "Seguimiento",
-    "Cierre",
+    "Seguimiento MPI",
+    "Cierre de Evaluación",
     "Auditoría Interna",
 ]
 
@@ -76,7 +201,6 @@ ESTADOS_EVALUACION = [
     "cerrada",
 ]
 
-# Etiquetas para mostrar en UI (estado → label con ícono)
 ESTADO_EVALUACION_DISPLAY = {
     "borrador":    "🔵 Borrador",
     "en_progreso": "🟡 En Progreso",
@@ -84,17 +208,28 @@ ESTADO_EVALUACION_DISPLAY = {
     "cerrada":     "✅ Cerrada",
 }
 
-# Colores semafóricos (CSS hex) por estado
 ESTADO_EVALUACION_COLOR = {
-    "borrador":    "#1565C0",   # Azul
-    "en_progreso": "#F9A825",   # Amarillo
-    "en_revision": "#E65100",   # Naranja
-    "cerrada":     "#2E7D32",   # Verde
+    "borrador":    "#1565C0",
+    "en_progreso": "#F9A825",
+    "en_revision": "#E65100",
+    "cerrada":     "#2E7D32",
 }
 
 # ==============================================================================
-# SEMÁFORO GENÉRICO DE PORCENTAJE
+# AVISOS LEGALES VISIBLES OBLIGATORIOS
 # ==============================================================================
+AVISO_ESTADOS_OFICIALES = (
+    "⚠️ **Aviso de Responsabilidad:** Los estados oficiales son antecedentes declarativos y documentales. "
+    "Lince GRC no certifica, registra, supervisa ni valida oficialmente modelos de prevención de infracciones. "
+    "Estas atribuciones corresponden exclusivamente a la Agencia de Protección de Datos Personales."
+)
+
+AVISO_COMPLETITUD_DOCUMENTAL = (
+    "💡 **Indicador Interno:** Este porcentaje es un indicador interno de completitud documental de Fase 2A. "
+    "No constituye certificación oficial, no garantiza aprobación por la Agencia de Protección de Datos Personales "
+    "y no acredita por sí solo el cumplimiento material de la Ley N° 19.628."
+)
+
 def semaforo_porcentaje(valor: float) -> str:
     """Devuelve ícono + texto según porcentaje (0-100)."""
     if valor is None:
