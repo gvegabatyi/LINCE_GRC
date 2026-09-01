@@ -187,11 +187,17 @@ def render() -> None:
 
             sub_perfil = st.form_submit_button("💾 Guardar Perfil MPI", type="primary", use_container_width=True)
             if sub_perfil:
+                evidencia_seleccionada = evidencias_ops[ev_id_perfil]
+
                 if not rep_nombre or not rep_nombre.strip() or not rep_rut or not rep_rut.strip():
                     st.error("El nombre y RUT del representante legal son obligatorios (Art. 3 letra a).")
-                elif estado_of_sel in ["certificado_agencia", "inscrito_registro_agencia"]:
-                    if not nro_cert or not nro_cert.strip() or not entidad_cert or not entidad_cert.strip():
-                        st.error("Para registrar estado de Certificación o Inscripción Oficial, debes indicar la Entidad Certificadora y el N° de Certificado (Arts. 15 y 17).")
+                elif estado_of_sel == "certificado_agencia":
+                    if not evidencia_seleccionada:
+                        st.error("Para registrar estado 'Certificado por la Agencia (Art. 15)' debes adjuntar la evidencia documental de respaldo.")
+                    elif not nro_cert or not nro_cert.strip():
+                        st.error("Para registrar estado de Certificación Oficial, debes ingresar el N° de Certificado emitido (Art. 15).")
+                    elif not f_cert or not f_venc:
+                        st.error("Debes registrar la fecha de emisión y vencimiento del certificado (Art. 15).")
                     else:
                         ok, msg = save_perfil_mpi(
                             empresa_id=empresa_id,
@@ -209,7 +215,69 @@ def render() -> None:
                             fecha_certificacion=f_cert,
                             fecha_vencimiento_certificacion=f_venc,
                             nro_registro_agencia=nro_reg,
-                            evidencia_aprobacion_id=evidencias_ops[ev_id_perfil],
+                            evidencia_aprobacion_id=evidencia_seleccionada,
+                            perfil_id=perfil_actual["id"] if perfil_actual else None,
+                        )
+                        if ok:
+                            st.success(f"✅ {msg}")
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {msg}")
+                elif estado_of_sel == "inscrito_registro_agencia":
+                    if not evidencia_seleccionada:
+                        st.error("Para registrar estado 'Inscrito en Registro Nacional (Art. 17)' debes adjuntar la evidencia documental de respaldo.")
+                    elif not nro_cert or not nro_cert.strip():
+                        st.error("Debes ingresar el N° de Certificado emitido (Art. 15).")
+                    elif not f_cert or not f_venc:
+                        st.error("Debes registrar la fecha de emisión y vencimiento del certificado (Art. 15).")
+                    elif not nro_reg or not nro_reg.strip():
+                        st.error("Para registrar estado de Inscripción Oficial, debes ingresar el N° de Inscripción en el Registro Nacional de la Agencia (Art. 17).")
+                    else:
+                        ok, msg = save_perfil_mpi(
+                            empresa_id=empresa_id,
+                            representante_legal_nombre=rep_nombre,
+                            representante_legal_rut=rep_rut,
+                            representante_legal_email=rep_email,
+                            representante_legal_telefono=rep_tel,
+                            fecha_adopcion_modelo=f_adopcion,
+                            version_modelo=version_mod,
+                            alcance_organizacional=alcance,
+                            estado_implementacion=estado_int_sel,
+                            estado_certificacion_oficial=estado_of_sel,
+                            entidad_certificadora=entidad_cert,
+                            nro_certificado=nro_cert,
+                            fecha_certificacion=f_cert,
+                            fecha_vencimiento_certificacion=f_venc,
+                            nro_registro_agencia=nro_reg,
+                            evidencia_aprobacion_id=evidencia_seleccionada,
+                            perfil_id=perfil_actual["id"] if perfil_actual else None,
+                        )
+                        if ok:
+                            st.success(f"✅ {msg}")
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {msg}")
+                elif estado_of_sel in ["vencido", "revocado"]:
+                    if not evidencia_seleccionada and (not alcance or not alcance.strip()):
+                        st.error("Para registrar estado 'Vencido' o 'Revocado' debes adjuntar la evidencia documental o ingresar un comentario justificativo en el alcance organizacional.")
+                    else:
+                        ok, msg = save_perfil_mpi(
+                            empresa_id=empresa_id,
+                            representante_legal_nombre=rep_nombre,
+                            representante_legal_rut=rep_rut,
+                            representante_legal_email=rep_email,
+                            representante_legal_telefono=rep_tel,
+                            fecha_adopcion_modelo=f_adopcion,
+                            version_modelo=version_mod,
+                            alcance_organizacional=alcance,
+                            estado_implementacion=estado_int_sel,
+                            estado_certificacion_oficial=estado_of_sel,
+                            entidad_certificadora=entidad_cert,
+                            nro_certificado=nro_cert,
+                            fecha_certificacion=f_cert if nro_cert else None,
+                            fecha_vencimiento_certificacion=f_venc if nro_cert else None,
+                            nro_registro_agencia=nro_reg,
+                            evidencia_aprobacion_id=evidencia_seleccionada,
                             perfil_id=perfil_actual["id"] if perfil_actual else None,
                         )
                         if ok:
@@ -218,6 +286,7 @@ def render() -> None:
                         else:
                             st.error(f"❌ {msg}")
                 else:
+                    # sin_solicitud o solicitud_en_tramite
                     ok, msg = save_perfil_mpi(
                         empresa_id=empresa_id,
                         representante_legal_nombre=rep_nombre,
@@ -234,7 +303,7 @@ def render() -> None:
                         fecha_certificacion=f_cert if nro_cert else None,
                         fecha_vencimiento_certificacion=f_venc if nro_cert else None,
                         nro_registro_agencia=nro_reg,
-                        evidencia_aprobacion_id=evidencias_ops[ev_id_perfil],
+                        evidencia_aprobacion_id=evidencia_seleccionada,
                         perfil_id=perfil_actual["id"] if perfil_actual else None,
                     )
                     if ok:
