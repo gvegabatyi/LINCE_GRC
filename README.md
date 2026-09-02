@@ -30,9 +30,15 @@ La implementación de los requerimientos para el **Modelo de Prevención de Infr
 5. **📋 Tratamientos (RAT Ampliado - Fase 2A):**
    - Registro con los **11 numerales taxativos del Art. 3 letra d)** (tipos de datos/sensibles, ámbito territorial, bases administradas, titulares, fines, procedencia, base licitud, destinatarios, transferencias internacionales, plazos y perfilamiento).
    - Sección separada de campos complementarios GRC.
-6. **🔍 Visitas / Auditorías:** Auditorías en terreno con checklist de seguridad (15 puntos) y tipo de visita.
-7. **📸 Evidencias:** Registro de enlaces a evidencias fotográficas y documentales externas vinculables al Perfil, Delegado y RAT.
-8. **📊 Exportar Informe:** Descarga de informe consolidado Excel de 10 hojas profesionales (`EMPRESAS`, `TRATAMIENTOS`, `VISITAS`, `EVIDENCIAS`, `RESUMEN`, `EVALUACIONES`, `PERFIL_MPI`, `DELEGADO_DPD`, `RAT_DECRETO_662`, `REFERENCIAS_NORMATIVAS`).
+6. **📥 Importar Antecedentes RAT (Fase 2A.2):**
+   - Bandeja documental para ingesta temporal en memoria de antecedentes (.xlsx, .csv, .docx, .pdf con texto, .md, .txt).
+   - Validación estructural ZIP/OpenXML y verificación de texto en PDF sin OCR.
+   - Mapeo manual de columnas a los 11 numerales RAT con límite de 4.000 caracteres por campo.
+   - Conciliación campo a campo contra tratamientos existentes con confirmación humana explícita.
+   - Política de minimización: los datos extraídos no se exportan ni se usan en completitud hasta su validación manual.
+7. **🔍 Visitas / Auditorías:** Auditorías en terreno con checklist de seguridad (15 puntos) y tipo de visita.
+8. **📸 Evidencias:** Registro de enlaces a evidencias fotográficas y documentales externas vinculables al Perfil, Delegado y RAT.
+9. **📊 Exportar Informe:** Descarga de informe consolidado Excel de 12 hojas profesionales (incluye `IMPORTACIONES_DOCUMENTALES` y `CANDIDATOS_RAT` en modo solo metadatos).
 
 ---
 

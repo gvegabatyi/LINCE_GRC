@@ -19,6 +19,7 @@ from modules import (
     visitas,
     evidencias,
     exportar,
+    importar_antecedentes,
 )
 
 # ==============================================================================
@@ -69,6 +70,7 @@ menu_opcion = st.sidebar.radio(
         "📁 Evaluaciones GRC",
         "🛡️ Perfil MPI y Delegado",
         "📋 Tratamientos (RAT)",
+        "📥 Importar Antecedentes RAT",
         "🔍 Visitas / Auditorías",
         "📸 Evidencias",
         "📊 Exportar Informe",
@@ -99,6 +101,8 @@ elif menu_opcion == "🛡️ Perfil MPI y Delegado":
     mpi_gobernanza.render()
 elif menu_opcion == "📋 Tratamientos (RAT)":
     tratamientos.render()
+elif menu_opcion == "📥 Importar Antecedentes RAT":
+    importar_antecedentes.render()
 elif menu_opcion == "🔍 Visitas / Auditorías":
     visitas.render()
 elif menu_opcion == "📸 Evidencias":

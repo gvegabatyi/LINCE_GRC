@@ -326,12 +326,84 @@ def generar_excel_completo() -> bytes:
         df_norm = get_referencias_normativas_df()
         ws10 = wb.create_sheet(title="REFERENCIAS_NORMATIVAS")
         ws10.append(["ID", "Fuente", "Artículo", "Materia", "Criterio Normativo"])
-        for _, r in df_norm.iterrows():
-            ws10.append([
-                r["id"], r.get("nombre_fuente") or "Decreto N° 662",
-                r["articulo"], r["materia"], r["descripcion_criterio"],
-            ])
+        if not df_norm.empty:
+            for _, r in df_norm.iterrows():
+                ws10.append([
+                    r["id"], r.get("nombre_fuente") or "Decreto N° 662",
+                    r["articulo"], r["materia"], r["descripcion_criterio"],
+                ])
         _format_sheet(ws10, header_fill, header_font, thin_border)
+    except Exception:
+        pass
+
+    # ==========================================================================
+    # HOJAS NUEVAS FASE 2A.2: IMPORTACIONES DOCUMENTALES Y CANDIDATOS RAT
+    # ==========================================================================
+
+    # ── Hoja 11: IMPORTACIONES_DOCUMENTALES ───────────────────────────────────
+    try:
+        from db.repositories.importaciones import get_importaciones_df, get_candidatos_df
+        import json as _json
+
+        df_imp = get_importaciones_df()
+        ws11 = wb.create_sheet(title="IMPORTACIONES_DOCUMENTALES")
+        ws11.append([
+            "ID", "Empresa", "Evaluación", "Nombre Archivo", "Tipo",
+            "Tamaño (KB)", "Hash (abreviado)", "Estado",
+            "Evidencia Permanente", "Total Candidatos",
+            "Candidatos Creados", "Candidatos Ignorados",
+            "Advertencias", "Fecha Importación",
+        ])
+        for _, r in df_imp.iterrows():
+            ws11.append([
+                r["id"],
+                r.get("empresa") or "",
+                r.get("evaluacion") or "",
+                r.get("nombre_archivo") or "",
+                r.get("tipo_archivo") or "",
+                float(r.get("tamano_kb") or 0),
+                r.get("hash_abreviado") or "",
+                r.get("estado") or "",
+                r.get("evidencia_permanente") or "No",
+                int(r.get("total_candidatos") or 0),
+                int(r.get("candidatos_creados") or 0),
+                int(r.get("candidatos_ignorados") or 0),
+                r.get("advertencias") or "",
+                str(r["created_at"])[:19] if pd.notnull(r.get("created_at")) else "",
+            ])
+        _format_sheet(ws11, header_fill, header_font, thin_border)
+    except Exception:
+        pass
+
+    # ── Hoja 12: CANDIDATOS_RAT ────────────────────────────────────────────────
+    try:
+        df_cand = get_candidatos_df()
+        ws12 = wb.create_sheet(title="CANDIDATOS_RAT")
+        ws12.append([
+            "ID", "Empresa", "Archivo Origen", "Hoja/Tabla",
+            "Fila", "Página", "Sección/Origen",
+            "Estado Revisión", "Acción Humana",
+            "Tratamiento Existente ID", "Tratamiento Creado ID",
+            "Observación Revisión", "Fecha Revisión", "Fecha Registro",
+        ])
+        for _, r in df_cand.iterrows():
+            ws12.append([
+                r["id"],
+                r.get("empresa") or "",
+                r.get("nombre_archivo") or "",
+                r.get("hoja") or "",
+                r.get("nro_fila") or "",
+                r.get("nro_pagina") or "",
+                r.get("seccion_origen") or "",
+                r.get("estado_revision") or "",
+                r.get("accion_humana") or "",
+                r.get("tratamiento_existente_id") or "",
+                r.get("tratamiento_creado_id") or "",
+                r.get("observacion_revision") or "",
+                str(r["revisado_en"])[:19] if pd.notnull(r.get("revisado_en")) else "",
+                str(r["created_at"])[:19] if pd.notnull(r.get("created_at")) else "",
+            ])
+        _format_sheet(ws12, header_fill, header_font, thin_border)
     except Exception:
         pass
 
@@ -361,6 +433,10 @@ def render() -> None:
     - **Hoja 8 — DELEGADO_DPD:** Delegado DPD, canal de contacto accesible e idoneidad *(Arts. 3 b, c; Arts. 6-13)*.
     - **Hoja 9 — RAT_DECRETO_662:** Registro de Actividades con los **11 numerales taxativos** *(Art. 3 d)*.
     - **Hoja 10 — REFERENCIAS_NORMATIVAS:** Citas y criterios del Decreto N° 662.
+
+    **Hojas de Importación Documental (Fase 2A.2):**
+    - **Hoja 11 — IMPORTACIONES_DOCUMENTALES:** Historial de archivos importados, hash, estado y candidatos generados.
+    - **Hoja 12 — CANDIDATOS_RAT:** Candidatos extraídos, estado de revisión y acción humana aplicada.
     """)
 
     st.markdown("---")

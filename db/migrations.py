@@ -262,7 +262,73 @@ def init_db() -> None:
             c.execute("ALTER TABLE tratamientos ADD COLUMN IF NOT EXISTS rat_decisiones_automatizadas_perfilamiento TEXT;")
             c.execute("ALTER TABLE tratamientos ADD COLUMN IF NOT EXISTS evidencia_id INTEGER REFERENCES evidencias(id) ON DELETE SET NULL;")
 
-        # Confirmar toda la transacción de migración
+            # ==================================================================
+            # PASO 6 (FASE 2A.2): Bandeja Documental de Importación RAT
+            # Tablas idempotentes — no destructivas — sin alterar datos existentes
+            # ==================================================================
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS importaciones_documentales (
+                    id                   SERIAL PRIMARY KEY,
+                    empresa_id           INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+                    evaluacion_id        INTEGER REFERENCES evaluaciones(id) ON DELETE SET NULL,
+                    nombre_archivo       VARCHAR(255) NOT NULL,
+                    tipo_archivo         VARCHAR(20) NOT NULL,
+                    mime_detectado       VARCHAR(100),
+                    tamano_bytes         INTEGER NOT NULL,
+                    hash_sha256          VARCHAR(64) NOT NULL,
+                    estado               VARCHAR(50) NOT NULL DEFAULT 'recibido',
+                    evidencia_id         INTEGER REFERENCES evidencias(id) ON DELETE SET NULL,
+                    tiene_evidencia_url  BOOLEAN DEFAULT FALSE,
+                    descripcion_origen   TEXT,
+                    advertencias         TEXT,
+                    resumen_extraccion   TEXT,
+                    total_candidatos     INTEGER DEFAULT 0,
+                    candidatos_creados   INTEGER DEFAULT 0,
+                    candidatos_ignorados INTEGER DEFAULT 0,
+                    created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_imp_doc_empresa
+                ON importaciones_documentales (empresa_id);
+            """)
+            c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_imp_doc_hash
+                ON importaciones_documentales (empresa_id, hash_sha256);
+            """)
+
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS importacion_tratamientos_candidatos (
+                    id                       SERIAL PRIMARY KEY,
+                    importacion_id           INTEGER NOT NULL
+                                             REFERENCES importaciones_documentales(id) ON DELETE CASCADE,
+                    empresa_id               INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+                    nro_hoja                 VARCHAR(100),
+                    nro_fila                 INTEGER,
+                    nro_pagina               INTEGER,
+                    seccion_origen           TEXT,
+                    datos_extraidos_json     JSONB NOT NULL,
+                    estado_revision          VARCHAR(50) NOT NULL DEFAULT 'pendiente',
+                    accion_humana            VARCHAR(50),
+                    tratamiento_existente_id INTEGER REFERENCES tratamientos(id) ON DELETE SET NULL,
+                    tratamiento_creado_id    INTEGER REFERENCES tratamientos(id) ON DELETE SET NULL,
+                    observacion_revision     TEXT,
+                    revisado_en              TIMESTAMP,
+                    created_at               TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at               TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_candidato_empresa_estado
+                ON importacion_tratamientos_candidatos (empresa_id, estado_revision);
+            """)
+            c.execute("""
+                CREATE INDEX IF NOT EXISTS idx_candidato_importacion
+                ON importacion_tratamientos_candidatos (importacion_id);
+            """)
+
+        # Confirmar toda la transacción de migración (Fase 1, 2A y 2A.2)
         conn.commit()
 
     except RuntimeError as exc:

@@ -43,6 +43,13 @@ La implementación de los requerimientos para el **Modelo de Prevención de Infr
 6. **Indicador Interno de Completitud Documental:** Medición ponderada en el Dashboard (perfil, DPD, RAT, 11 numerales y evidencias) con aviso explícito de que no constituye certificación oficial.
 7. **Exportación Consolidada de 10 Hojas:** Generación en memoria de libro `.xlsx` con las 6 hojas históricas + 4 hojas nuevas (`PERFIL_MPI`, `DELEGADO_DPD`, `RAT_DECRETO_662`, `REFERENCIAS_NORMATIVAS`).
 
+### Implementado en Fase 2A.2 (Importación y Conciliación Documental RAT):
+1. **Bandeja Documental Segura:** Módulo `📥 Importar Antecedentes RAT` para ingesta temporal en memoria de antecedentes históricos (.xlsx, .csv, .docx, .pdf con texto, .md, .txt).
+2. **Validación Estructural Rigurosa:** Inspección de contenedores ZIP de Office OpenXML (detección de `[Content_Types].xml` y `xl/workbook.xml` o `word/document.xml`), comprobación de encabezado PDF `%PDF-` con `pdfplumber` y decodificación controlada de texto plano.
+3. **Privacidad y Minimización:** Aviso previo de legitimidad; exclusión de datos de filas en el resumen técnico; límite de 4.000 caracteres por campo con truncamiento advertido; control opt-in (desactivado por defecto) para columnas adicionales no mapeadas; y exclusión estricta de contenidos extraídos en la exportación Excel (hojas 11 `IMPORTACIONES_DOCUMENTALES` y 12 `CANDIDATOS_RAT`).
+4. **Conciliación Campo a Campo con Tratamientos Existentes:** Comparación lado a lado entre valor actual en base de datos y valor extraído, con checkboxes individuales y confirmación humana explícita. No existe actualización automática.
+5. **Ausencia de Estado Persistente en Tratamientos:** La tabla `tratamientos` no posee columna de estado. Los tratamientos creados desde importación se catalogan explícitamente como *"Creado desde importación; pendiente de caracterización y validación en Tratamientos (RAT)"*, manteniéndose el estado `aprobado_borrador` exclusivamente en el candidato de importación.
+
 > [!NOTE]
 > Elementos diferidos expresamente para fases posteriores: Matriz de riesgos 5×5, catálogo de controles, diagnóstico completo con hallazgos y planes de acción, canal de denuncias operado por terceros, notificaciones a la Agencia, y perfiles de usuario / RBAC.
 
