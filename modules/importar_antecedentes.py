@@ -48,6 +48,7 @@ from services.extraccion_service import (
     CAMPOS_RAT_ETIQUETAS,
     MAX_CANDIDATOS_POR_VISTA,
     MAX_CARACTERES_CAMPO,
+    NOMBRE_TRATAMIENTO_DEFECTO,
     extraer_xlsx_hojas,
     extraer_xlsx_encabezados_preview,
     generar_candidatos_xlsx,
@@ -206,17 +207,17 @@ def _tab_nueva_importacion() -> None:
     col_r2.metric("Tamaño", f"{tamano_kb:.1f} KB")
     col_r3.metric("Hash SHA-256 (abreviado)", hash_archivo[:12] + "…")
 
-    # Advertencia de duplicado (no bloquea)
     dup = detectar_duplicado_empresa(empresa_id, hash_archivo)
     advertencias_list = list(advertencias_formato)
     if dup:
         msg_dup = (
-            f"⚠️ **Duplicado detectado:** Este archivo ya fue importado el "
+            f"⚠️ **Importación previa detectada:** Este archivo ya fue registrado el "
             f"{str(dup['created_at'])[:10]} (Importación #{dup['id']} — {dup['nombre_archivo']}, "
-            f"estado: {dup['estado']}). Puedes continuar igualmente."
+            f"estado: {dup['estado']}). Al guardar, el sistema completará automáticamente "
+            "los candidatos faltantes sin duplicar los ya existentes."
         )
         st.warning(msg_dup)
-        advertencias_list.append(f"Duplicado de importación #{dup['id']} ({dup['nombre_archivo']})")
+        advertencias_list.append(f"Importación previa #{dup['id']} ({dup['nombre_archivo']})")
 
     st.success(f"✅ Archivo '{archivo.name}' validado correctamente en memoria.")
     st.markdown("---")
@@ -241,25 +242,26 @@ def _tab_nueva_importacion() -> None:
     columnas_detectadas_archivo = st.session_state.get(f"imp_cols_{hash_archivo}", [])
     campos_rat_mapeados = st.session_state.get(f"imp_campos_{hash_archivo}", [])
     truncados_contador = st.session_state.get(f"imp_truncados_{hash_archivo}", 0)
+    filas_utiles_totales = st.session_state.get(f"imp_filas_utiles_{hash_archivo}", len(candidatos_generados))
 
     if tipo_detectado == "xlsx":
-        candidatos_generados, columnas_detectadas_archivo, campos_rat_mapeados, truncados_contador = _flujo_xlsx(
+        candidatos_generados, columnas_detectadas_archivo, campos_rat_mapeados, truncados_contador, filas_utiles_totales = _flujo_xlsx(
             contenido, hash_archivo, candidatos_generados, conservar_adicionales
         )
     elif tipo_detectado == "csv":
-        candidatos_generados, columnas_detectadas_archivo, campos_rat_mapeados, truncados_contador = _flujo_csv(
+        candidatos_generados, columnas_detectadas_archivo, campos_rat_mapeados, truncados_contador, filas_utiles_totales = _flujo_csv(
             contenido, hash_archivo, candidatos_generados, conservar_adicionales
         )
     elif tipo_detectado == "docx":
-        candidatos_generados, columnas_detectadas_archivo, campos_rat_mapeados, truncados_contador = _flujo_docx(
+        candidatos_generados, columnas_detectadas_archivo, campos_rat_mapeados, truncados_contador, filas_utiles_totales = _flujo_docx(
             contenido, hash_archivo, candidatos_generados, conservar_adicionales
         )
     elif tipo_detectado == "pdf":
-        candidatos_generados, columnas_detectadas_archivo, campos_rat_mapeados, truncados_contador = _flujo_pdf(
+        candidatos_generados, columnas_detectadas_archivo, campos_rat_mapeados, truncados_contador, filas_utiles_totales = _flujo_pdf(
             contenido, hash_archivo, candidatos_generados, empresa_id
         )
     elif tipo_detectado in ("md", "txt"):
-        candidatos_generados, columnas_detectadas_archivo, campos_rat_mapeados, truncados_contador = _flujo_texto(
+        candidatos_generados, columnas_detectadas_archivo, campos_rat_mapeados, truncados_contador, filas_utiles_totales = _flujo_texto(
             contenido, hash_archivo, candidatos_generados, tipo_detectado
         )
     else:
@@ -276,23 +278,34 @@ def _tab_nueva_importacion() -> None:
     if not candidatos_generados:
         return
 
-    # ── PASO 6: Previsualización de candidatos ─────────────────────────────────
+    # ── PASO 6: Previsualización completa de candidatos ───────────────────────
     st.markdown("---")
     st.subheader("Paso 6 — Previsualización de candidatos generados")
     n = len(candidatos_generados)
+
+    st.markdown(f"#### Candidatos generados: {n} de {filas_utiles_totales} filas útiles detectadas")
     st.info(
-        f"**{n} candidato(s) generado(s).** "
-        "Todos están marcados como **⚠️ DATOS NO VALIDADOS** y no alteran la base de datos "
-        "hasta que los revise individualmente en la pestaña de conciliación."
+        "Todos están catalogados como **⚠️ DATOS NO VALIDADOS** y no alteran la base de datos "
+        "hasta que los revise individualmente en la pestaña de conciliación.",
+        icon="🛡️",
     )
 
-    if n > MAX_CANDIDATOS_POR_VISTA:
-        st.warning(
-            f"Se generaron {n} candidatos. En la vista previa se muestran los primeros {MAX_CANDIDATOS_POR_VISTA}."
-        )
-        candidatos_generados = candidatos_generados[:MAX_CANDIDATOS_POR_VISTA]
+    # Tabla visual completa para verificar que todas las filas útiles están presentes
+    resumen_cands = []
+    for idx_c, cand in enumerate(candidatos_generados, start=1):
+        dj = cand["datos_extraidos_json"]
+        nom = dj.get("nombre_tratamiento", NOMBRE_TRATAMIENTO_DEFECTO)
+        origen = f"{cand.get('nro_hoja') or 'Tabla'} — Fila {cand.get('nro_fila') or cand.get('nro_pagina') or '—'}"
+        campos_con_dato = len([k for k, v in dj.items() if k != "campos_adicionales" and v])
+        resumen_cands.append({
+            "#": idx_c,
+            "Origen": origen,
+            "Nombre del Tratamiento (candidato)": nom,
+            "Campos RAT con dato": campos_con_dato,
+        })
+    st.dataframe(pd.DataFrame(resumen_cands), use_container_width=True)
 
-    # ── PASO 8: Evidencia URL ──────────────────────────────────────────────────
+    # ── PASO 7: Evidencia URL ──────────────────────────────────────────────────
     st.subheader("Paso 7 — Vincular evidencia documental de origen (opcional)")
     df_ev_emp = get_evidencias_df(empresa_id=empresa_id)
     opciones_ev = {"(Sin evidencia permanente vinculada)": None}
@@ -310,12 +323,35 @@ def _tab_nueva_importacion() -> None:
 
     st.markdown("---")
 
-    # ── PASO 9: Registrar importación y candidatos ─────────────────────────────
+    # ── PASO 8: Registrar o completar importación en bandeja ───────────────────
     st.subheader("Paso 8 — Confirmar y guardar candidatos en la bandeja")
 
-    if st.button("💾 Guardar candidatos en la bandeja para revisión", type="primary", key=f"btn_registrar_{hash_archivo}"):
+    # Revisar si ya existen candidatos en la BD para este archivo
+    cands_previos_en_bd = 0
+    id_importacion_existente = None
+    if dup:
+        id_importacion_existente = dup["id"]
+        df_cands_bd = get_candidatos_df(importacion_id=id_importacion_existente)
+        cands_previos_en_bd = len(df_cands_bd)
+
+    if cands_previos_en_bd > 0:
+        cands_nuevos_estimados = max(n - cands_previos_en_bd, 0)
+        st.info(
+            f"ℹ️ **Estado de la bandeja:**\n"
+            f"- Filas útiles detectadas: **{n}**\n"
+            f"- Candidatos ya existentes en BD (Importación #{id_importacion_existente}): **{cands_previos_en_bd}**\n"
+            f"- Candidatos nuevos a crear: **{cands_nuevos_estimados}**\n"
+            f"- Total esperado: **{n}**"
+        )
+
+    texto_boton = (
+        f"💾 Completar candidatos faltantes ({n - cands_previos_en_bd} nuevos)"
+        if cands_previos_en_bd > 0
+        else f"💾 Guardar {n} candidatos en la bandeja para revisión"
+    )
+
+    if st.button(texto_boton, type="primary", key=f"btn_registrar_{hash_archivo}"):
         with st.spinner("Guardando candidatos en la bandeja documental…"):
-            # Resumen EXCLUSIVAMENTE técnico (sin datos de filas ni texto documental)
             resumen_txt = resumen_extraccion(
                 formato=tipo_detectado,
                 tamano_kb=tamano_kb,
@@ -325,37 +361,46 @@ def _tab_nueva_importacion() -> None:
                 advertencias=advertencias_list,
             )
 
-            imp_id, msg_imp = crear_importacion(
-                empresa_id=empresa_id,
-                nombre_archivo=archivo.name,
-                tipo_archivo=tipo_detectado,
-                mime_detectado=tipo_detectado,
-                tamano_bytes=len(contenido),
-                hash_sha256=hash_archivo,
-                evaluacion_id=evaluacion_id,
-                evidencia_id=evidencia_id,
-                tiene_evidencia_url=tiene_evidencia_url,
-                descripcion_origen=descripcion_origen,
-                advertencias="; ".join(advertencias_list) if advertencias_list else "",
-                resumen_extraccion=resumen_txt,
-            )
+            # Reutilizar importación si ya existe para este hash o crear nueva
+            if id_importacion_existente:
+                imp_id = id_importacion_existente
+            else:
+                imp_id, msg_imp = crear_importacion(
+                    empresa_id=empresa_id,
+                    nombre_archivo=archivo.name,
+                    tipo_archivo=tipo_detectado,
+                    mime_detectado=tipo_detectado,
+                    tamano_bytes=len(contenido),
+                    hash_sha256=hash_archivo,
+                    evaluacion_id=evaluacion_id,
+                    evidencia_id=evidencia_id,
+                    tiene_evidencia_url=tiene_evidencia_url,
+                    descripcion_origen=descripcion_origen,
+                    advertencias="; ".join(advertencias_list) if advertencias_list else "",
+                    resumen_extraccion=resumen_txt,
+                )
+                if imp_id is None:
+                    st.error(f"Error al registrar la importación: {msg_imp}")
+                    return
 
-            if imp_id is None:
-                st.error(f"Error al registrar la importación: {msg_imp}")
-                return
-
-            # Insertar candidatos con límites sanitizados
-            errores_cand = 0
+            # Insertar únicamente los candidatos no existentes (prevención de duplicados)
             insertados = 0
+            omitidos_duplicados = 0
+            errores_cand = 0
+
             for cand in candidatos_generados:
-                if candidato_duplicado_en_importacion(imp_id, cand.get("nro_hoja"), cand.get("nro_fila")):
+                hoja = cand.get("nro_hoja")
+                fila = cand.get("nro_fila")
+                if candidato_duplicado_en_importacion(imp_id, hoja, fila):
+                    omitidos_duplicados += 1
                     continue
+
                 cid, _ = crear_candidato(
                     importacion_id=imp_id,
                     empresa_id=empresa_id,
                     datos_extraidos_json=cand["datos_extraidos_json"],
-                    nro_hoja=cand.get("nro_hoja"),
-                    nro_fila=cand.get("nro_fila"),
+                    nro_hoja=hoja,
+                    nro_fila=fila,
                     nro_pagina=cand.get("nro_pagina"),
                     seccion_origen=cand.get("seccion_origen"),
                 )
@@ -364,24 +409,26 @@ def _tab_nueva_importacion() -> None:
                 else:
                     errores_cand += 1
 
-            actualizar_estado_importacion(imp_id, "con_candidatos", total_candidatos=insertados)
+            total_en_bd = omitidos_duplicados + insertados
+            actualizar_estado_importacion(imp_id, "con_candidatos", total_candidatos=total_en_bd)
+            actualizar_contadores_importacion(imp_id)
 
             # Actualizar contadores de sesión
             st.session_state["imp_bytes_sesion"] = bytes_sesion + len(contenido)
             st.session_state["imp_archivos_sesion"] = archivos_sesion + 1
+
             # Limpiar estado temporal
             st.session_state.pop(f"imp_candidatos_{hash_archivo}", None)
             st.session_state.pop(f"imp_cols_{hash_archivo}", None)
             st.session_state.pop(f"imp_campos_{hash_archivo}", None)
             st.session_state.pop(f"imp_truncados_{hash_archivo}", None)
+            st.session_state.pop(f"imp_filas_utiles_{hash_archivo}", None)
 
-            if errores_cand:
-                st.warning(f"⚠️ {insertados} candidato(s) registrado(s). {errores_cand} error(es) al insertar.")
-            else:
-                st.success(
-                    f"✅ Importación #{imp_id} guardada con {insertados} candidato(s). "
-                    "Pase a la pestaña **🔍 Revisar y Conciliar Candidatos** para decidir la acción de cada uno."
-                )
+            st.success(
+                f"✅ **Importación completada:** {insertados} candidatos nuevos creados "
+                f"({omitidos_duplicados} ya existían). Total registrado: {total_en_bd} candidatos.\n\n"
+                "Pase a la pestaña **🔍 Revisar y Conciliar Candidatos** para procesarlos individualmente."
+            )
             st.rerun()
 
 
@@ -389,31 +436,32 @@ def _tab_nueva_importacion() -> None:
 # FLUJOS DE EXTRACCIÓN POR FORMATO
 # ==============================================================================
 
-def _flujo_xlsx(contenido: bytes, hash_archivo: str, candidatos_previos: list, conservar_adicionales: bool) -> tuple[list, list, list, int]:
+def _flujo_xlsx(contenido: bytes, hash_archivo: str, candidatos_previos: list, conservar_adicionales: bool) -> tuple[list, list, list, int, int]:
     """Flujo interactivo de extracción para XLSX."""
     try:
         hojas = extraer_xlsx_hojas(contenido)
     except ValueError as exc:
         st.error(str(exc))
-        return [], [], [], 0
+        return [], [], [], 0, 0
 
     hoja_sel = st.selectbox("Seleccionar hoja", hojas, key=f"xlsx_hoja_{hash_archivo}")
 
     try:
-        encabezados, preview = extraer_xlsx_encabezados_preview(contenido, hoja_sel)
+        encabezados, preview, total_datos = extraer_xlsx_encabezados_preview(contenido, hoja_sel)
     except ValueError as exc:
         st.error(str(exc))
-        return [], [], [], 0
+        return [], [], [], 0, 0
 
     if not encabezados:
         st.warning("No se detectaron encabezados en la hoja seleccionada.")
-        return [], [], [], 0
+        return [], [], [], 0, 0
 
-    st.markdown(f"**Encabezados detectados ({len(encabezados)} columnas):**")
+    st.markdown(f"**Total filas de datos detectadas:** {total_datos} | **Columnas:** {len(encabezados)}")
+    st.markdown("**Encabezados:**")
     st.code(", ".join(encabezados))
 
     if preview:
-        st.markdown("**Vista previa (primeras filas de datos):**")
+        st.caption(f"Mostrando muestra de las primeras {len(preview)} filas de datos:")
         st.dataframe(pd.DataFrame(preview, columns=encabezados), use_container_width=True)
 
     mapeo = _selector_mapeo_columnas(encabezados, hash_archivo)
@@ -421,39 +469,43 @@ def _flujo_xlsx(contenido: bytes, hash_archivo: str, candidatos_previos: list, c
 
     if not campos_mapeados:
         st.info("Mapee al menos una columna a un campo RAT para generar candidatos.")
-        return [], encabezados, [], 0
+        return [], encabezados, [], 0, total_datos
 
     truncados = 0
+    total_utiles = total_datos
+
     if st.button("▶ Generar candidatos desde XLSX", key=f"btn_gen_xlsx_{hash_archivo}"):
         try:
-            candidatos, truncados = generar_candidatos_xlsx(
+            candidatos, truncados, total_utiles = generar_candidatos_xlsx(
                 contenido, hoja_sel, mapeo, conservar_adicionales=conservar_adicionales
             )
             st.session_state[f"imp_candidatos_{hash_archivo}"] = candidatos
             st.session_state[f"imp_cols_{hash_archivo}"] = encabezados
             st.session_state[f"imp_campos_{hash_archivo}"] = campos_mapeados
             st.session_state[f"imp_truncados_{hash_archivo}"] = truncados
-            st.success(f"✅ {len(candidatos)} candidato(s) generado(s).")
+            st.session_state[f"imp_filas_utiles_{hash_archivo}"] = total_utiles
+            st.success(f"✅ Candidatos generados: {len(candidatos)} de {total_utiles} filas útiles detectadas.")
         except Exception as exc:
             st.error(f"Error al generar candidatos: {exc}")
 
     cands = st.session_state.get(f"imp_candidatos_{hash_archivo}", candidatos_previos)
-    return cands, encabezados, campos_mapeados, truncados
+    tot = st.session_state.get(f"imp_filas_utiles_{hash_archivo}", total_utiles)
+    return cands, encabezados, campos_mapeados, truncados, tot
 
 
-def _flujo_csv(contenido: bytes, hash_archivo: str, candidatos_previos: list, conservar_adicionales: bool) -> tuple[list, list, list, int]:
+def _flujo_csv(contenido: bytes, hash_archivo: str, candidatos_previos: list, conservar_adicionales: bool) -> tuple[list, list, list, int, int]:
     """Flujo interactivo de extracción para CSV."""
     try:
-        encabezados, preview, delimitador = extraer_csv_encabezados_preview(contenido)
+        encabezados, preview, delimitador, total_datos = extraer_csv_encabezados_preview(contenido)
     except Exception as exc:
         st.error(f"Error al leer el CSV: {exc}")
-        return [], [], [], 0
+        return [], [], [], 0, 0
 
-    st.markdown(f"**Delimitador detectado:** `{repr(delimitador)}` · **Columnas:** {len(encabezados)}")
+    st.markdown(f"**Delimitador:** `{repr(delimitador)}` | **Total filas:** {total_datos} | **Columnas:** {len(encabezados)}")
     if encabezados:
         st.code(", ".join(encabezados))
     if preview:
-        st.markdown("**Vista previa:**")
+        st.caption(f"Mostrando muestra de las primeras {len(preview)} filas de datos:")
         st.dataframe(pd.DataFrame(preview, columns=encabezados), use_container_width=True)
 
     mapeo = _selector_mapeo_columnas(encabezados, hash_archivo)
@@ -461,36 +513,40 @@ def _flujo_csv(contenido: bytes, hash_archivo: str, candidatos_previos: list, co
 
     if not campos_mapeados:
         st.info("Mapee al menos una columna a un campo RAT para generar candidatos.")
-        return [], encabezados, [], 0
+        return [], encabezados, [], 0, total_datos
 
     truncados = 0
+    total_utiles = total_datos
+
     if st.button("▶ Generar candidatos desde CSV", key=f"btn_gen_csv_{hash_archivo}"):
         try:
-            candidatos, truncados = generar_candidatos_csv(
+            candidatos, truncados, total_utiles = generar_candidatos_csv(
                 contenido, mapeo, conservar_adicionales=conservar_adicionales
             )
             st.session_state[f"imp_candidatos_{hash_archivo}"] = candidatos
             st.session_state[f"imp_cols_{hash_archivo}"] = encabezados
             st.session_state[f"imp_campos_{hash_archivo}"] = campos_mapeados
             st.session_state[f"imp_truncados_{hash_archivo}"] = truncados
-            st.success(f"✅ {len(candidatos)} candidato(s) generado(s).")
+            st.session_state[f"imp_filas_utiles_{hash_archivo}"] = total_utiles
+            st.success(f"✅ Candidatos generados: {len(candidatos)} de {total_utiles} filas útiles detectadas.")
         except Exception as exc:
             st.error(f"Error al generar candidatos: {exc}")
 
     cands = st.session_state.get(f"imp_candidatos_{hash_archivo}", candidatos_previos)
-    return cands, encabezados, campos_mapeados, truncados
+    tot = st.session_state.get(f"imp_filas_utiles_{hash_archivo}", total_utiles)
+    return cands, encabezados, campos_mapeados, truncados, tot
 
 
-def _flujo_docx(contenido: bytes, hash_archivo: str, candidatos_previos: list, conservar_adicionales: bool) -> tuple[list, list, list, int]:
-    """Flujo interactivo de extracción para DOCX."""
+def _flujo_docx(contenido: bytes, hash_archivo: str, candidatos_previos: list, conservar_adicionales: bool) -> tuple[list, list, list, int, int]:
+    """Flujo interactivo de extracción para DOCX con soporte integral de filas útiles."""
     try:
         estructura = extraer_docx_estructura(contenido)
     except ImportError:
-        st.error("La biblioteca 'python-docx' no está disponible en este entorno. Verifique que esté instalada.")
-        return [], [], [], 0
+        st.error("La biblioteca 'python-docx' no está disponible en este entorno.")
+        return [], [], [], 0, 0
     except ValueError as exc:
         st.error(str(exc))
-        return [], [], [], 0
+        return [], [], [], 0, 0
 
     tablas = estructura.get("tablas", [])
     secciones = estructura.get("secciones", [])
@@ -507,11 +563,12 @@ def _flujo_docx(contenido: bytes, hash_archivo: str, candidatos_previos: list, c
     encabezados = []
     campos_mapeados = []
     truncados = 0
+    total_utiles = 0
 
     if modo.startswith("Tabla"):
         if not tablas:
             st.warning("No se detectaron tablas en el documento.")
-            return candidatos, [], [], 0
+            return candidatos, [], [], 0, 0
 
         idx_tabla = st.selectbox(
             "Seleccionar tabla",
@@ -521,10 +578,14 @@ def _flujo_docx(contenido: bytes, hash_archivo: str, candidatos_previos: list, c
         )
         tabla_sel = tablas[idx_tabla]
         encabezados = tabla_sel["encabezados"]
+        total_datos = tabla_sel["total_filas"]
 
+        st.markdown(f"**Total filas de datos detectadas:** {total_datos} | **Columnas:** {len(encabezados)}")
         st.markdown("**Encabezados:**")
         st.code(", ".join(encabezados))
+
         if tabla_sel["filas_preview"]:
+            st.caption(f"Mostrando muestra de las primeras {len(tabla_sel['filas_preview'])} filas de datos (de un total de {total_datos}):")
             st.dataframe(
                 pd.DataFrame(tabla_sel["filas_preview"], columns=encabezados),
                 use_container_width=True,
@@ -535,18 +596,23 @@ def _flujo_docx(contenido: bytes, hash_archivo: str, candidatos_previos: list, c
 
         if not campos_mapeados:
             st.info("Mapee al menos una columna.")
-            return candidatos, encabezados, [], 0
+            return candidatos, encabezados, [], 0, total_datos
 
         if st.button("▶ Generar candidatos desde tabla DOCX", key=f"btn_gen_docx_{hash_archivo}"):
-            nuevos, truncados = generar_candidatos_docx_tabla(
+            nuevos, truncados, total_utiles, combinaciones = generar_candidatos_docx_tabla(
                 estructura, idx_tabla, mapeo, conservar_adicionales=conservar_adicionales
             )
-            candidatos.extend(nuevos)
+            candidatos = nuevos
             st.session_state[f"imp_candidatos_{hash_archivo}"] = candidatos
             st.session_state[f"imp_cols_{hash_archivo}"] = encabezados
             st.session_state[f"imp_campos_{hash_archivo}"] = campos_mapeados
             st.session_state[f"imp_truncados_{hash_archivo}"] = truncados
-            st.success(f"✅ {len(nuevos)} candidato(s) añadido(s).")
+            st.session_state[f"imp_filas_utiles_{hash_archivo}"] = total_utiles
+
+            if combinaciones > 0:
+                st.info(f"ℹ️ Se combinaron valores de columnas con el mismo destino usando el separador ' / ' en {combinaciones} campo(s).")
+
+            st.success(f"✅ Candidatos generados: {len(candidatos)} de {total_utiles} filas útiles detectadas.")
 
     else:
         if not secciones:
@@ -568,19 +634,20 @@ def _flujo_docx(contenido: bytes, hash_archivo: str, candidatos_previos: list, c
             st.success("✅ Candidato manual añadido.")
 
     cands = st.session_state.get(f"imp_candidatos_{hash_archivo}", candidatos)
-    return cands, encabezados, campos_mapeados, truncados
+    tot = st.session_state.get(f"imp_filas_utiles_{hash_archivo}", total_utiles or len(cands))
+    return cands, encabezados, campos_mapeados, truncados, tot
 
 
-def _flujo_pdf(contenido: bytes, hash_archivo: str, candidatos_previos: list, empresa_id: int) -> tuple[list, list, list, int]:
+def _flujo_pdf(contenido: bytes, hash_archivo: str, candidatos_previos: list, empresa_id: int) -> tuple[list, list, list, int, int]:
     """Flujo interactivo de extracción para PDF con texto."""
     try:
         paginas = extraer_pdf_paginas(contenido)
     except ImportError:
-        st.error("La biblioteca 'pdfplumber' no está disponible en este entorno. Verifique que esté instalada.")
-        return [], [], [], 0
+        st.error("La biblioteca 'pdfplumber' no está disponible en este entorno.")
+        return [], [], [], 0, 0
     except ValueError as exc:
         st.error(str(exc))
-        return [], [], [], 0
+        return [], [], [], 0, 0
 
     paginas_con_texto = [p for p in paginas if p["tiene_texto"]]
     paginas_sin_texto = [p for p in paginas if not p["tiene_texto"]]
@@ -594,13 +661,12 @@ def _flujo_pdf(contenido: bytes, hash_archivo: str, candidatos_previos: list, em
     if paginas_sin_texto:
         st.warning(
             f"⚠️ {len(paginas_sin_texto)} página(s) sin texto extraíble: "
-            f"{[p['nro_pagina'] for p in paginas_sin_texto]}. "
-            "Estas páginas parecen ser imágenes o estar escaneadas. Formato diferido para esta etapa."
+            f"{[p['nro_pagina'] for p in paginas_sin_texto]}. Formato diferido."
         )
 
     if not paginas_con_texto:
         st.error("Este PDF no tiene texto extraíble. Conviértalo a formato con texto o regístrelo como evidencia.")
-        return [], [], [], 0
+        return [], [], [], 0, 0
 
     nro_pagina = st.selectbox(
         "Seleccionar página para crear candidato",
@@ -616,7 +682,6 @@ def _flujo_pdf(contenido: bytes, hash_archivo: str, candidatos_previos: list, em
         height=200,
         disabled=True,
     )
-    st.caption("Copie los fragmentos relevantes en el formulario manual inferior.")
 
     candidatos = list(candidatos_previos)
     cand_data = _formulario_candidato_manual(f"pdf_manual_{hash_archivo}_{nro_pagina}", seccion_origen=f"Página {nro_pagina}")
@@ -626,10 +691,10 @@ def _flujo_pdf(contenido: bytes, hash_archivo: str, candidatos_previos: list, em
         st.success(f"✅ Candidato manual añadido desde Página {nro_pagina}.")
 
     cands = st.session_state.get(f"imp_candidatos_{hash_archivo}", candidatos)
-    return cands, [f"Página {nro_pagina}"], list(cand_data.keys()) if cand_data else [], 0
+    return cands, [f"Página {nro_pagina}"], list(cand_data.keys()) if cand_data else [], 0, len(cands)
 
 
-def _flujo_texto(contenido: bytes, hash_archivo: str, candidatos_previos: list, tipo: str) -> tuple[list, list, list, int]:
+def _flujo_texto(contenido: bytes, hash_archivo: str, candidatos_previos: list, tipo: str) -> tuple[list, list, list, int, int]:
     """Flujo interactivo de extracción para MD y TXT."""
     texto = extraer_texto_plano(contenido)
     st.text_area(
@@ -638,7 +703,6 @@ def _flujo_texto(contenido: bytes, hash_archivo: str, candidatos_previos: list, 
         height=250,
         disabled=True,
     )
-    st.caption("Seleccione bloques relevantes y complete el formulario manual inferior.")
 
     candidatos = list(candidatos_previos)
     cand_data = _formulario_candidato_manual(f"txt_manual_{hash_archivo}", seccion_origen=f"Bloque {tipo.upper()}")
@@ -648,7 +712,7 @@ def _flujo_texto(contenido: bytes, hash_archivo: str, candidatos_previos: list, 
         st.success("✅ Candidato manual añadido.")
 
     cands = st.session_state.get(f"imp_candidatos_{hash_archivo}", candidatos)
-    return cands, [f"Bloque {tipo.upper()}"], list(cand_data.keys()) if cand_data else [], 0
+    return cands, [f"Bloque {tipo.upper()}"], list(cand_data.keys()) if cand_data else [], 0, len(cands)
 
 
 # ==============================================================================
@@ -666,7 +730,7 @@ def _selector_mapeo_columnas(encabezados: list[str], key_base: str) -> dict:
     for idx, enc in enumerate(encabezados):
         col = cols[idx % len(cols)]
         sel = col.selectbox(
-            f"Col. {idx}: `{enc[:20]}`",
+            f"Col. {idx}: `{enc[:25]}`",
             opciones_rat,
             key=f"mapeo_{key_base}_{idx}",
         )
@@ -716,6 +780,21 @@ def _tab_revisar_candidatos() -> None:
     empresa_sel = st.selectbox("Empresa", list(opciones_emp.keys()), key="rev_empresa")
     empresa_id = opciones_emp[empresa_sel]
 
+    # Contadores por estado de la empresa
+    df_todos = get_candidatos_df(empresa_id=empresa_id)
+    if not df_todos.empty:
+        c_pend = len(df_todos[df_todos["estado_revision"] == "pendiente"])
+        c_aprob = len(df_todos[df_todos["estado_revision"] == "aprobado_borrador"])
+        c_prop = len(df_todos[df_todos["estado_revision"] == "propuesto_actualizacion"])
+        c_ign = len(df_todos[df_todos["estado_revision"] == "ignorado"])
+
+        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+        col_m1.metric("Pendientes", c_pend)
+        col_m2.metric("Creados (Pendiente Caracterización)", c_aprob)
+        col_m3.metric("Propuestos Act.", c_prop)
+        col_m4.metric("Ignorados", c_ign)
+        st.markdown("---")
+
     df_cand = get_candidatos_df(empresa_id=empresa_id, estado_revision="pendiente")
 
     if df_cand.empty:
@@ -723,7 +802,23 @@ def _tab_revisar_candidatos() -> None:
         _mostrar_historial_revisados(empresa_id)
         return
 
-    st.info(f"**{len(df_cand)} candidato(s) pendiente(s)** de revisión para **{empresa_sel}**.")
+    # Selector de visualización / límite visible
+    col_hdr1, col_hdr2 = st.columns([3, 1])
+    with col_hdr1:
+        st.info(f"**{len(df_cand)} candidato(s) pendiente(s)** de revisión para **{empresa_sel}**.")
+    with col_hdr2:
+        cant_mostrar = st.selectbox(
+            "Mostrar:",
+            ["10", "25", "50", "Todos"],
+            index=3,
+            key="rev_cant_mostrar",
+        )
+
+    limite_vis = len(df_cand) if cant_mostrar == "Todos" else int(cant_mostrar)
+    candidatos_visibles = df_cand.iloc[:limite_vis]
+
+    if len(df_cand) > limite_vis:
+        st.caption(f"Mostrando {limite_vis} de {len(df_cand)} candidatos pendientes.")
 
     # Cargar tratamientos existentes para la comparación
     df_trat = get_tratamientos_df(empresa_id=empresa_id)
@@ -739,7 +834,7 @@ def _tab_revisar_candidatos() -> None:
         for _, r in df_eval.iterrows():
             opciones_eval_rev[f"{r['nombre']} ({r.get('periodo','')})"] = r["id"]
 
-    for _, cand in df_cand.iterrows():
+    for _, cand in candidatos_visibles.iterrows():
         cand_id = int(cand["id"])
         importacion_id = int(cand["importacion_id"])
 
@@ -750,7 +845,6 @@ def _tab_revisar_candidatos() -> None:
         )
 
         with st.expander(f"⚠️ Candidato #{cand_id} — {origen_info}", expanded=False):
-            # Parsear JSON de datos extraídos
             try:
                 datos_json = json.loads(cand["datos_json"]) if isinstance(cand["datos_json"], str) else {}
             except Exception:
@@ -759,9 +853,13 @@ def _tab_revisar_candidatos() -> None:
             st.caption(f"📍 **Origen documental:** {origen_info}")
             st.caption("⚠️ **DATOS EXTRAÍDOS NO VALIDADOS — Requieren confirmación humana explícita**")
 
-            # Detectar si hay coincidencia exacta de nombre con tratamiento existente
+            # Detectar coincidencia de nombre
             nombre_cand = datos_json.get("nombre_tratamiento", "")
-            similar = detectar_candidato_similar_en_tratamientos(empresa_id, nombre_cand) if nombre_cand else None
+            similar = (
+                detectar_candidato_similar_en_tratamientos(empresa_id, nombre_cand)
+                if nombre_cand and nombre_cand != NOMBRE_TRATAMIENTO_DEFECTO
+                else None
+            )
             if similar:
                 st.warning(
                     f"⚠️ **Coincidencia detectada:** Existe tratamiento ID #{similar['id']} — "
@@ -769,7 +867,6 @@ def _tab_revisar_candidatos() -> None:
                     "Considere conciliarlo en lugar de crear un tratamiento duplicado."
                 )
 
-            # Selector de modo de revisión
             st.markdown("---")
             st.markdown("#### Seleccione la acción para este candidato:")
 
@@ -840,7 +937,6 @@ def _tab_revisar_candidatos() -> None:
                     "contra el valor extraído y elegir **manualmente** cuáles desea actualizar."
                 )
 
-                # Sugerir tratamiento coincidente si existe
                 index_defecto = 0
                 if similar:
                     for idx_opc, (txt, tid) in enumerate(opciones_trat.items()):
@@ -859,7 +955,6 @@ def _tab_revisar_candidatos() -> None:
                 if trat_id_sel is None:
                     st.info("Seleccione un tratamiento existente para habilitar la comparativa campo a campo.")
                 else:
-                    # Cargar datos actuales del tratamiento
                     trat_actual = df_trat[df_trat["id"] == trat_id_sel]
                     if trat_actual.empty:
                         st.error("No se encontró el tratamiento seleccionado en la base de datos.")
@@ -869,7 +964,6 @@ def _tab_revisar_candidatos() -> None:
                         st.markdown("---")
                         st.markdown("**Comparativa campo a campo — Marque explícitamente los campos a aplicar:**")
 
-                        # Encabezados de la tabla comparativa
                         c_hdr1, c_hdr2, c_hdr3, c_hdr4 = st.columns([3, 4, 4, 2])
                         c_hdr1.markdown("**Campo RAT**")
                         c_hdr2.markdown("**Valor Actual en BD**")
@@ -878,12 +972,10 @@ def _tab_revisar_candidatos() -> None:
 
                         campos_seleccionados_actualizar = {}
 
-                        # Iterar sobre todos los campos RAT reconocidos
                         for clave_campo, etiqueta_campo in CAMPOS_RAT_DECRETO:
                             val_actual = str(r_actual.get(clave_campo) or "").strip()
                             val_extraido = str(datos_json.get(clave_campo) or "").strip()
 
-                            # Solo mostrar fila si hay algo en valor actual o en valor extraído
                             if not val_actual and not val_extraido:
                                 continue
 
@@ -905,7 +997,6 @@ def _tab_revisar_candidatos() -> None:
                                 c_col3.write("*(No extraído)*")
                                 c_col4.write("—")
 
-                        # ── Vista previa de cambios confirmados ─────────────────
                         st.markdown("---")
                         st.markdown("##### Vista previa de cambios a confirmar:")
 
@@ -928,8 +1019,6 @@ def _tab_revisar_candidatos() -> None:
                             )
 
                             if st.button("💾 Aplicar cambios confirmados", type="primary", key=f"btn_aplicar_concil_{cand_id}"):
-                                # Construir el payload completo partiendo del registro actual
-                                # Solo sobreescribir los campos marcados explícitamente
                                 payload_final = {}
                                 for clave_c, _ in CAMPOS_RAT_DECRETO:
                                     if clave_c in campos_seleccionados_actualizar:
@@ -937,7 +1026,6 @@ def _tab_revisar_candidatos() -> None:
                                     else:
                                         payload_final[clave_c] = str(r_actual.get(clave_c) or "").strip()
 
-                                # Invocar update_tratamiento oficial y parametrizado
                                 ok_upd, msg_upd = update_tratamiento(
                                     tratamiento_id=trat_id_sel,
                                     empresa_id=empresa_id,
@@ -966,7 +1054,6 @@ def _tab_revisar_candidatos() -> None:
                                 if not ok_upd:
                                     st.error(f"Error al actualizar tratamiento: {msg_upd}")
                                 else:
-                                    # Registrar trazabilidad en el candidato
                                     nombres_campos_aplicados = [
                                         CAMPOS_RAT_ETIQUETAS.get(k, k) for k in campos_seleccionados_actualizar.keys()
                                     ]
@@ -1074,7 +1161,6 @@ def _tab_historial() -> None:
         use_container_width=True,
     )
 
-    # Detalle de candidatos de una importación específica
     st.markdown("---")
     ids_imp = list(df_imp["id"].astype(int))
     if ids_imp:

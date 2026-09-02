@@ -12,6 +12,9 @@ Principios:
 - Límites de privacidad: máx. 4.000 caracteres por campo (truncamiento explícito con advertencia).
 - Campos no mapeados NO se almacenan salvo opt-in explícito del usuario.
 - Resumen de extracción almacena exclusivamente metadatos técnicos (sin datos personales ni valores de filas).
+- Procesamiento de filas útiles: no se descarta ninguna fila útil con datos por campos incompletos.
+- Regla de combinación: columnas con el mismo destino se combinan con ' / ' sin sobrescritura destructiva.
+- Nombre de tratamiento por defecto: 'Nombre de tratamiento pendiente de identificación'.
 """
 
 import io
@@ -50,6 +53,7 @@ CAMPOS_RAT_ETIQUETAS = {c[0]: c[1] for c in CAMPOS_RAT_DECRETO}
 
 MAX_CANDIDATOS_POR_VISTA = 100
 MAX_CARACTERES_CAMPO = 4000
+NOMBRE_TRATAMIENTO_DEFECTO = "Nombre de tratamiento pendiente de identificación"
 
 
 # ==============================================================================
@@ -69,6 +73,45 @@ def limitar_texto_campo(val: str, max_chars: int = MAX_CARACTERES_CAMPO) -> tupl
     return val_str, False
 
 
+def _combinar_valores_campo(existente: str, nuevo: str) -> str:
+    """
+    Combina dos valores mapeados al mismo campo destino de forma determinista y segura:
+    - Si el existente está vacío, toma el nuevo.
+    - Si el nuevo está vacío, conserva el existente.
+    - Si ambos tienen texto y son idénticos, no duplica.
+    - Si ambos tienen texto distinto, combina con ' / '.
+    """
+    ex = existente.strip() if existente else ""
+    nv = nuevo.strip() if nuevo else ""
+    if not ex:
+        return nv
+    if not nv:
+        return ex
+    if ex == nv or nv in ex.split(" / "):
+        return ex
+    return f"{ex} / {nv}"
+
+
+def _es_fila_util(celdas: list[str], encabezados: list[str] | None = None) -> bool:
+    """
+    Determina si una fila es útil:
+    - Falsa si todas las celdas están vacías.
+    - Falsa si todas las celdas coinciden literalmente con la fila de encabezados.
+    - Verdadera si contiene al menos una celda con texto no vacío.
+    """
+    celdas_limpias = [str(c).strip() for c in celdas if c is not None]
+    if not any(c for c in celdas_limpias):
+        return False
+
+    if encabezados:
+        enc_limpios = [str(h).strip().lower() for h in encabezados if h is not None]
+        fila_comparar = [c.lower() for c in celdas_limpias]
+        if fila_comparar == enc_limpios:
+            return False
+
+    return True
+
+
 # ==============================================================================
 # XLSX
 # ==============================================================================
@@ -83,10 +126,9 @@ def extraer_xlsx_hojas(contenido: bytes) -> list[str]:
         raise ValueError(f"No se pudo leer el archivo XLSX: {exc}")
 
 
-def extraer_xlsx_encabezados_preview(contenido: bytes, nombre_hoja: str) -> tuple[list[str], list[list]]:
+def extraer_xlsx_encabezados_preview(contenido: bytes, nombre_hoja: str) -> tuple[list[str], list[list], int]:
     """
-    Retorna (encabezados, primeras_filas) de la hoja seleccionada.
-    Primeras_filas: hasta 5 filas de datos (sin encabezado).
+    Retorna (encabezados, primeras_filas_muestra, total_filas_datos) de la hoja seleccionada.
     """
     try:
         import openpyxl
@@ -95,13 +137,12 @@ def extraer_xlsx_encabezados_preview(contenido: bytes, nombre_hoja: str) -> tupl
         filas = []
         for row in ws.iter_rows(values_only=True):
             filas.append([str(v) if v is not None else "" for v in row])
-            if len(filas) >= 6:
-                break
         if not filas:
-            return [], []
+            return [], [], 0
         encabezados = filas[0]
-        preview = filas[1:6]
-        return encabezados, preview
+        datos = filas[1:]
+        preview = datos[:5]
+        return encabezados, preview, len(datos)
     except Exception as exc:
         raise ValueError(f"No se pudo leer la hoja '{nombre_hoja}': {exc}")
 
@@ -109,14 +150,14 @@ def extraer_xlsx_encabezados_preview(contenido: bytes, nombre_hoja: str) -> tupl
 def generar_candidatos_xlsx(
     contenido: bytes,
     nombre_hoja: str,
-    mapeo_columnas: dict,   # {indice_columna: campo_rat}
-    fila_inicio: int = 1,   # 0-based, después del encabezado
+    mapeo_columnas: dict,
+    fila_inicio: int = 1,
     limite: int = MAX_CANDIDATOS_POR_VISTA,
     conservar_adicionales: bool = False,
-) -> tuple[list[dict], int]:
+) -> tuple[list[dict], int, int]:
     """
-    Genera lista de candidatos desde filas XLSX.
-    Retorna (lista_candidatos, contador_campos_truncados).
+    Genera candidatos desde filas XLSX.
+    Retorna (candidatos, total_truncados, total_filas_utiles).
     """
     try:
         import openpyxl
@@ -126,13 +167,25 @@ def generar_candidatos_xlsx(
     except Exception as exc:
         raise ValueError(f"Error al leer filas del XLSX: {exc}")
 
-    candidatos = []
-    datos_filas = filas[1:] if len(filas) > 1 else []
-    total_truncados = 0
+    if not filas:
+        return [], 0, 0
 
-    for idx_relativo, fila in enumerate(datos_filas[fila_inicio:], start=fila_inicio):
+    encabezados = [str(v).strip() if v is not None else "" for v in filas[0]]
+    datos_filas = filas[1:] if len(filas) > 1 else []
+
+    candidatos = []
+    total_truncados = 0
+    total_filas_utiles = 0
+
+    for idx_relativo, fila_raw in enumerate(datos_filas[fila_inicio:], start=fila_inicio):
+        fila = [str(v).strip() if v is not None else "" for v in fila_raw]
+        if not _es_fila_util(fila, encabezados):
+            continue
+
+        total_filas_utiles += 1
         if len(candidatos) >= limite:
-            break
+            continue
+
         nro_fila_original = idx_relativo + 2
         campos_candidato = {}
         campos_adicionales = {}
@@ -142,34 +195,40 @@ def generar_candidatos_xlsx(
             if fue_truncado:
                 total_truncados += 1
 
-            if idx_col in mapeo_columnas and mapeo_columnas[idx_col]:
-                campos_candidato[mapeo_columnas[idx_col]] = val_limpio
-            elif conservar_adicionales:
+            campo_destino = mapeo_columnas.get(idx_col)
+            if campo_destino:
+                campos_candidato[campo_destino] = _combinar_valores_campo(
+                    campos_candidato.get(campo_destino, ""), val_limpio
+                )
+            elif conservar_adicionales and val_limpio:
                 campos_adicionales[f"col_{idx_col}"] = val_limpio
 
-        if any(v for v in campos_candidato.values()):
-            datos_json = dict(campos_candidato)
-            if conservar_adicionales and campos_adicionales:
-                datos_json["campos_adicionales"] = campos_adicionales
+        # Nombre por defecto si la fila útil no contiene nombre
+        if not campos_candidato.get("nombre_tratamiento", "").strip():
+            campos_candidato["nombre_tratamiento"] = NOMBRE_TRATAMIENTO_DEFECTO
 
-            candidatos.append({
-                "nro_hoja": nombre_hoja,
-                "nro_fila": nro_fila_original,
-                "nro_pagina": None,
-                "seccion_origen": None,
-                "datos_extraidos_json": datos_json,
-            })
+        datos_json = dict(campos_candidato)
+        if conservar_adicionales and campos_adicionales:
+            datos_json["campos_adicionales"] = campos_adicionales
 
-    return candidatos, total_truncados
+        candidatos.append({
+            "nro_hoja": nombre_hoja,
+            "nro_fila": nro_fila_original,
+            "nro_pagina": None,
+            "seccion_origen": None,
+            "datos_extraidos_json": datos_json,
+        })
+
+    return candidatos, total_truncados, total_filas_utiles
 
 
 # ==============================================================================
 # CSV
 # ==============================================================================
 
-def extraer_csv_encabezados_preview(contenido: bytes) -> tuple[list[str], list[list], str]:
+def extraer_csv_encabezados_preview(contenido: bytes) -> tuple[list[str], list[list], str, int]:
     """
-    Detecta delimitador y retorna (encabezados, primeras_filas, delimitador_usado).
+    Detecta delimitador y retorna (encabezados, primeras_filas_muestra, delimitador, total_filas_datos).
     """
     import csv
 
@@ -183,18 +242,14 @@ def extraer_csv_encabezados_preview(contenido: bytes) -> tuple[list[str], list[l
         delimitador = ","
 
     reader = csv.reader(io.StringIO(texto), delimiter=delimitador)
-    filas = []
-    for row in reader:
-        filas.append(row)
-        if len(filas) >= 6:
-            break
-
+    filas = list(reader)
     if not filas:
-        return [], [], delimitador
+        return [], [], delimitador, 0
 
     encabezados = filas[0]
-    preview = filas[1:6]
-    return encabezados, preview, delimitador
+    datos = filas[1:]
+    preview = datos[:5]
+    return encabezados, preview, delimitador, len(datos)
 
 
 def generar_candidatos_csv(
@@ -203,7 +258,7 @@ def generar_candidatos_csv(
     fila_inicio: int = 0,
     limite: int = MAX_CANDIDATOS_POR_VISTA,
     conservar_adicionales: bool = False,
-) -> tuple[list[dict], int]:
+) -> tuple[list[dict], int, int]:
     """Genera candidatos desde filas CSV."""
     import csv
     texto = _decodificar_texto(contenido)
@@ -217,52 +272,72 @@ def generar_candidatos_csv(
 
     reader = csv.reader(io.StringIO(texto), delimiter=delimitador)
     filas = list(reader)
+    if not filas:
+        return [], 0, 0
+
+    encabezados = [c.strip() for c in filas[0]]
     datos_filas = filas[1:] if len(filas) > 1 else []
 
     candidatos = []
     total_truncados = 0
+    total_filas_utiles = 0
 
     for idx_relativo, fila in enumerate(datos_filas[fila_inicio:], start=fila_inicio):
+        fila_limpia = [c.strip() for c in fila]
+        if not _es_fila_util(fila_limpia, encabezados):
+            continue
+
+        total_filas_utiles += 1
         if len(candidatos) >= limite:
-            break
+            continue
+
         nro_fila_original = idx_relativo + 2
         campos_candidato = {}
         campos_adicionales = {}
 
-        for idx_col, valor in enumerate(fila):
+        for idx_col, valor in enumerate(fila_limpia):
             val_limpio, fue_truncado = limitar_texto_campo(valor)
             if fue_truncado:
                 total_truncados += 1
 
-            if idx_col in mapeo_columnas and mapeo_columnas[idx_col]:
-                campos_candidato[mapeo_columnas[idx_col]] = val_limpio
-            elif conservar_adicionales:
+            campo_destino = mapeo_columnas.get(idx_col)
+            if campo_destino:
+                campos_candidato[campo_destino] = _combinar_valores_campo(
+                    campos_candidato.get(campo_destino, ""), val_limpio
+                )
+            elif conservar_adicionales and val_limpio:
                 campos_adicionales[f"col_{idx_col}"] = val_limpio
 
-        if any(v for v in campos_candidato.values()):
-            datos_json = dict(campos_candidato)
-            if conservar_adicionales and campos_adicionales:
-                datos_json["campos_adicionales"] = campos_adicionales
+        if not campos_candidato.get("nombre_tratamiento", "").strip():
+            campos_candidato["nombre_tratamiento"] = NOMBRE_TRATAMIENTO_DEFECTO
 
-            candidatos.append({
-                "nro_hoja": "CSV",
-                "nro_fila": nro_fila_original,
-                "nro_pagina": None,
-                "seccion_origen": None,
-                "datos_extraidos_json": datos_json,
-            })
+        datos_json = dict(campos_candidato)
+        if conservar_adicionales and campos_adicionales:
+            datos_json["campos_adicionales"] = campos_adicionales
 
-    return candidatos, total_truncados
+        candidatos.append({
+            "nro_hoja": "CSV",
+            "nro_fila": nro_fila_original,
+            "nro_pagina": None,
+            "seccion_origen": None,
+            "datos_extraidos_json": datos_json,
+        })
+
+    return candidatos, total_truncados, total_filas_utiles
 
 
 # ==============================================================================
-# DOCX
+# DOCX (TABLAS Y SECCIONES DE TEXTO)
 # ==============================================================================
 
 def extraer_docx_estructura(contenido: bytes) -> dict:
     """
-    Extrae la estructura del DOCX: tablas y secciones de párrafos.
-    Retorna dict con claves 'tablas' y 'secciones'.
+    Extrae la estructura completa del DOCX: tablas y secciones de párrafos.
+    Para cada tabla reporta:
+    - encabezados reales (fila 0)
+    - filas_preview (muestra de las primeras 5 filas)
+    - total_filas_datos (todas las filas de la tabla excepto encabezado)
+    - filas_texto completas
     """
     try:
         from docx import Document
@@ -283,12 +358,15 @@ def extraer_docx_estructura(contenido: bytes) -> dict:
                 filas_texto.append(celdas)
 
             encabezados = filas_texto[0] if filas_texto else []
-            preview = filas_texto[1:4] if len(filas_texto) > 1 else []
+            filas_datos = filas_texto[1:] if len(filas_texto) > 1 else []
+            preview = filas_datos[:5]
+            total_datos = len(filas_datos)
+
             tablas.append({
                 "indice": idx_tabla,
                 "encabezados": encabezados,
                 "filas_preview": preview,
-                "total_filas": max(len(filas_texto) - 1, 0),
+                "total_filas": total_datos,
                 "filas_texto": filas_texto,
             })
         except Exception:
@@ -332,47 +410,81 @@ def generar_candidatos_docx_tabla(
     mapeo_columnas: dict,
     limite: int = MAX_CANDIDATOS_POR_VISTA,
     conservar_adicionales: bool = False,
-) -> tuple[list[dict], int]:
-    """Genera candidatos desde una tabla específica del DOCX."""
+) -> tuple[list[dict], int, int, int]:
+    """
+    Genera candidatos desde una tabla específica del DOCX.
+
+    REGLAS DE ROBUSTEZ:
+    1. Procesa cada fila útil (excluye únicamente filas vacías o repeticiones literales de encabezados).
+    2. Si una tabla tiene 12 filas reales de datos, genera exactamente 12 candidatos.
+    3. Si varias columnas se mapean al mismo campo destino, combina con ' / ' sin borrar valores no vacíos.
+    4. Si la fila no tiene valor en nombre_tratamiento, asigna NOMBRE_TRATAMIENTO_DEFECTO.
+    5. Celdas combinadas vacías no descartan la fila si contiene datos en otras columnas.
+
+    Retorna (candidatos, total_truncados, total_filas_utiles, total_combinaciones).
+    """
     tablas = estructura.get("tablas", [])
     tabla = next((t for t in tablas if t["indice"] == indice_tabla), None)
     if not tabla:
-        return [], 0
+        return [], 0, 0, 0
 
     filas_texto = tabla.get("filas_texto", [])
+    if not filas_texto:
+        return [], 0, 0, 0
+
+    encabezados = [c.strip() for c in filas_texto[0]]
     datos_filas = filas_texto[1:] if len(filas_texto) > 1 else []
 
     candidatos = []
     total_truncados = 0
+    total_filas_utiles = 0
+    total_combinaciones = 0
 
-    for nro_fila, fila in enumerate(datos_filas[:limite], start=2):
+    for idx, fila in enumerate(datos_filas):
+        fila_limpia = [c.strip() for c in fila]
+        if not _es_fila_util(fila_limpia, encabezados):
+            continue
+
+        total_filas_utiles += 1
+        if len(candidatos) >= limite:
+            continue
+
+        nro_fila_original = idx + 2  # 1-based, contando encabezado en fila 1
         campos_candidato = {}
         campos_adicionales = {}
 
-        for idx_col, valor in enumerate(fila):
+        for idx_col, valor in enumerate(fila_limpia):
             val_limpio, fue_truncado = limitar_texto_campo(valor)
             if fue_truncado:
                 total_truncados += 1
 
-            if idx_col in mapeo_columnas and mapeo_columnas[idx_col]:
-                campos_candidato[mapeo_columnas[idx_col]] = val_limpio
-            elif conservar_adicionales:
+            campo_destino = mapeo_columnas.get(idx_col)
+            if campo_destino:
+                val_existente = campos_candidato.get(campo_destino, "")
+                val_combinado = _combinar_valores_campo(val_existente, val_limpio)
+                if val_existente and val_limpio and val_existente != val_limpio:
+                    total_combinaciones += 1
+                campos_candidato[campo_destino] = val_combinado
+            elif conservar_adicionales and val_limpio:
                 campos_adicionales[f"col_{idx_col}"] = val_limpio
 
-        if any(v for v in campos_candidato.values()):
-            datos_json = dict(campos_candidato)
-            if conservar_adicionales and campos_adicionales:
-                datos_json["campos_adicionales"] = campos_adicionales
+        # Regla del nombre de tratamiento
+        if not campos_candidato.get("nombre_tratamiento", "").strip():
+            campos_candidato["nombre_tratamiento"] = NOMBRE_TRATAMIENTO_DEFECTO
 
-            candidatos.append({
-                "nro_hoja": f"Tabla {indice_tabla + 1}",
-                "nro_fila": nro_fila,
-                "nro_pagina": None,
-                "seccion_origen": f"Tabla {indice_tabla + 1} del documento DOCX",
-                "datos_extraidos_json": datos_json,
-            })
+        datos_json = dict(campos_candidato)
+        if conservar_adicionales and campos_adicionales:
+            datos_json["campos_adicionales"] = campos_adicionales
 
-    return candidatos, total_truncados
+        candidatos.append({
+            "nro_hoja": f"Tabla {indice_tabla + 1}",
+            "nro_fila": nro_fila_original,
+            "nro_pagina": None,
+            "seccion_origen": f"Tabla {indice_tabla + 1} del documento DOCX",
+            "datos_extraidos_json": datos_json,
+        })
+
+    return candidatos, total_truncados, total_filas_utiles, total_combinaciones
 
 
 # ==============================================================================
@@ -380,10 +492,7 @@ def generar_candidatos_docx_tabla(
 # ==============================================================================
 
 def extraer_pdf_paginas(contenido: bytes) -> list[dict]:
-    """
-    Extrae texto por página del PDF usando pdfplumber.
-    Retorna lista de dicts: {nro_pagina, texto_preview, texto_completo, tiene_texto}.
-    """
+    """Extrae texto por página del PDF usando pdfplumber."""
     try:
         import pdfplumber
     except ImportError:
@@ -415,15 +524,15 @@ def crear_candidato_manual_pdf(
     nro_pagina: int,
     campos_ingresados: dict,
 ) -> dict:
-    """
-    Crea un candidato a partir de campos ingresados manualmente por el usuario
-    desde un fragmento de texto de PDF. Aplica límite de 4.000 caracteres por campo.
-    """
+    """Crea candidato manual desde fragmento de texto PDF."""
     campos_limpios = {}
     for k, v in campos_ingresados.items():
         if v and str(v).strip():
             txt, _ = limitar_texto_campo(str(v).strip())
             campos_limpios[k] = txt
+
+    if not campos_limpios.get("nombre_tratamiento", "").strip():
+        campos_limpios["nombre_tratamiento"] = NOMBRE_TRATAMIENTO_DEFECTO
 
     return {
         "nro_hoja": None,
@@ -447,15 +556,15 @@ def crear_candidato_manual_texto(
     seccion_origen: str,
     campos_ingresados: dict,
 ) -> dict:
-    """
-    Crea un candidato a partir de campos ingresados manualmente por el usuario
-    desde un bloque de texto MD/TXT. Aplica límite de 4.000 caracteres por campo.
-    """
+    """Crea candidato manual desde bloque de texto plano."""
     campos_limpios = {}
     for k, v in campos_ingresados.items():
         if v and str(v).strip():
             txt, _ = limitar_texto_campo(str(v).strip())
             campos_limpios[k] = txt
+
+    if not campos_limpios.get("nombre_tratamiento", "").strip():
+        campos_limpios["nombre_tratamiento"] = NOMBRE_TRATAMIENTO_DEFECTO
 
     return {
         "nro_hoja": None,
@@ -489,14 +598,7 @@ def resumen_extraccion(
     campos_mapeados: list,
     advertencias: list | None = None,
 ) -> str:
-    """
-    Genera texto de resumen de extracción para almacenar en importaciones_documentales.
-
-    REGLA DE PRIVACIDAD ESTRICTA:
-    Contiene ÚNICAMENTE metadatos técnicos del archivo y del proceso de mapeo.
-    NUNCA incluye nombres de personas, RUT, correos, teléfonos, valores de filas
-    ni contenido textual de los documentos.
-    """
+    """Genera resumen estrictamente técnico sin datos personales ni valores de filas."""
     cols_str = ", ".join([str(c)[:30] for c in columnas_detectadas[:6]])
     sufijo_cols = f"… (+{len(columnas_detectadas) - 6})" if len(columnas_detectadas) > 6 else ""
 
@@ -506,7 +608,7 @@ def resumen_extraccion(
     partes = [
         f"Tipo: {formato.upper()}",
         f"Tamaño: {tamano_kb:.1f} KB",
-        f"Unidades detectadas: {total_filas_o_paginas}",
+        f"Unidades útiles: {total_filas_o_paginas}",
     ]
     if cols_str:
         partes.append(f"Columnas detectadas: [{cols_str}{sufijo_cols}]")
