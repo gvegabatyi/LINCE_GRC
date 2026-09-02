@@ -10,6 +10,7 @@ import os
 import hmac
 import streamlit as st
 from db.migrations import init_db
+from db.repositories.empresas import get_empresas_df
 
 # Importación de módulos UI (rutas absolutas desde la raíz del proyecto)
 from modules import (
@@ -124,20 +125,64 @@ st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=70)
 st.sidebar.title("Lince GRC")
 st.sidebar.caption("Gobierno, Riesgo y Cumplimiento")
 
+# ── Bloque persistente: Contexto de Empresa Activa ───────────────────────────
+st.sidebar.markdown("---")
+empresa_activa_id = st.session_state.get("empresa_activa_id")
+df_todas_empresas = get_empresas_df()
+empresa_activa_data = None
+
+if empresa_activa_id and not df_todas_empresas.empty:
+    filtro_emp = df_todas_empresas[df_todas_empresas["id"] == empresa_activa_id]
+    if not filtro_emp.empty:
+        empresa_activa_data = filtro_emp.iloc[0]
+    else:
+        st.session_state.pop("empresa_activa_id", None)
+        empresa_activa_id = None
+
+if empresa_activa_data is not None:
+    st.sidebar.markdown("**🟢 EMPRESA ACTIVA**")
+    st.sidebar.markdown(f"**{empresa_activa_data['nombre']}**")
+    rut_emp = str(empresa_activa_data.get("rut") or "").strip()
+    if rut_emp:
+        st.sidebar.caption(f"RUT: {rut_emp}")
+    st.sidebar.caption("Estado: **Seleccionada**")
+    if st.sidebar.button("Cambiar empresa", key="btn_cambiar_empresa", use_container_width=True):
+        st.session_state["nav_menu_principal"] = "🏢 Empresas"
+        st.rerun()
+else:
+    st.sidebar.markdown("**EMPRESA ACTIVA**")
+    st.sidebar.markdown("**Sin empresa seleccionada**")
+    st.sidebar.caption("Seleccione una empresa antes de gestionar información GRC.")
+    if st.sidebar.button("Ir a Empresas", key="btn_ir_a_empresas", use_container_width=True):
+        st.session_state["nav_menu_principal"] = "🏢 Empresas"
+        st.rerun()
+
+st.sidebar.caption("ℹ️ *Contexto de navegación. Verifique la empresa seleccionada en cada formulario antes de guardar.*")
+st.sidebar.markdown("---")
+
+# ── Menú Principal ────────────────────────────────────────────────────────────
+OPCIONES_MENU = [
+    "🏠 Dashboard",
+    "🏢 Empresas",
+    "📁 Evaluaciones GRC",
+    "🛡️ Perfil MPI y Delegado",
+    "📋 Tratamientos (RAT)",
+    "📥 Importar Antecedentes RAT",
+    "🔍 Visitas / Auditorías",
+    "📸 Evidencias",
+    "📊 Exportar Informe",
+]
+
+nav_actual = st.session_state.get("nav_menu_principal", "🏠 Dashboard")
+indice_nav = OPCIONES_MENU.index(nav_actual) if nav_actual in OPCIONES_MENU else 0
+
 menu_opcion = st.sidebar.radio(
     "Menú Principal",
-    [
-        "🏠 Dashboard",
-        "🏢 Empresas",
-        "📁 Evaluaciones GRC",
-        "🛡️ Perfil MPI y Delegado",
-        "📋 Tratamientos (RAT)",
-        "📥 Importar Antecedentes RAT",
-        "🔍 Visitas / Auditorías",
-        "📸 Evidencias",
-        "📊 Exportar Informe",
-    ],
+    OPCIONES_MENU,
+    index=indice_nav,
+    key="nav_menu_radio",
 )
+st.session_state["nav_menu_principal"] = menu_opcion
 
 st.sidebar.markdown("---")
 if st.sidebar.button("🔄 Reparar / Sincronizar Base de Datos"):

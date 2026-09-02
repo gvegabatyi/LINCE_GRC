@@ -70,8 +70,23 @@ def render() -> None:
             f"{r['id']} - {r['nombre']} ({r['rut']})": r["id"]
             for _, r in df_empresas.iterrows()
         }
-        seleccion_str = st.selectbox("Selecciona una empresa para gestionar:", list(empresa_opciones.keys()))
+
+        # Mantener selección si ya existía empresa_activa_id en sesión
+        index_default = 0
+        empresa_activa_previa = st.session_state.get("empresa_activa_id")
+        if empresa_activa_previa:
+            opciones_ids = list(empresa_opciones.values())
+            if empresa_activa_previa in opciones_ids:
+                index_default = opciones_ids.index(empresa_activa_previa)
+
+        seleccion_str = st.selectbox(
+            "Selecciona una empresa para gestionar:",
+            list(empresa_opciones.keys()),
+            index=index_default,
+            key="empresa_activa_selector",
+        )
         empresa_sel_id = empresa_opciones[seleccion_str]
+        st.session_state["empresa_activa_id"] = empresa_sel_id
         empresa_data = df_empresas[df_empresas["id"] == empresa_sel_id].iloc[0]
 
         col_edit, col_del = st.columns([2, 1])
