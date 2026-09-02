@@ -452,9 +452,6 @@ def _flujo_xlsx(contenido: bytes, hash_archivo: str, candidatos_previos: list, c
 
     st.markdown(f"**Total filas de datos detectadas:** {total_datos} | **Columnas:** {len(encabezados)}")
 
-    # Leyenda compacta e inequívoca de correspondencia de columnas
-    _render_leyenda_columnas(encabezados)
-
     if datos:
         if total_datos <= 100:
             st.caption(f"Mostrando las {total_datos} filas de datos detectadas. Usa el desplazamiento vertical y horizontal para recorrer la tabla completa.")
@@ -470,11 +467,11 @@ def _flujo_xlsx(contenido: bytes, hash_archivo: str, candidatos_previos: list, c
             hide_index=False,
         )
 
-    # Sección destacada: Columna en Configuración y Vista Rápida
-    _render_columna_en_configuracion(encabezados, datos, hash_archivo)
-
     mapeo = _selector_mapeo_columnas(encabezados, hash_archivo)
     campos_mapeados = [v for v in mapeo.values() if v]
+
+    # Referencia activa en archivo importado (aparece al modificar un selector)
+    _render_referencia_activa(encabezados, datos, hash_archivo)
 
     if not campos_mapeados:
         st.info("Mapee al menos una columna a un campo RAT para generar candidatos.")
@@ -512,9 +509,6 @@ def _flujo_csv(contenido: bytes, hash_archivo: str, candidatos_previos: list, co
 
     st.markdown(f"**Delimitador:** `{repr(delimitador)}` | **Total filas:** {total_datos} | **Columnas:** {len(encabezados)}")
 
-    # Leyenda compacta e inequívoca de correspondencia de columnas
-    _render_leyenda_columnas(encabezados)
-
     if datos:
         if total_datos <= 100:
             st.caption(f"Mostrando las {total_datos} filas de datos detectadas. Usa el desplazamiento vertical y horizontal para recorrer la tabla completa.")
@@ -530,11 +524,11 @@ def _flujo_csv(contenido: bytes, hash_archivo: str, candidatos_previos: list, co
             hide_index=False,
         )
 
-    # Sección destacada: Columna en Configuración y Vista Rápida
-    _render_columna_en_configuracion(encabezados, datos, hash_archivo)
-
     mapeo = _selector_mapeo_columnas(encabezados, hash_archivo)
     campos_mapeados = [v for v in mapeo.values() if v]
+
+    # Referencia activa en archivo importado (aparece al modificar un selector)
+    _render_referencia_activa(encabezados, datos, hash_archivo)
 
     if not campos_mapeados:
         st.info("Mapee al menos una columna a un campo RAT para generar candidatos.")
@@ -608,9 +602,6 @@ def _flujo_docx(contenido: bytes, hash_archivo: str, candidatos_previos: list, c
 
         st.markdown(f"**Total filas de datos detectadas:** {total_datos} | **Columnas:** {len(encabezados)}")
 
-        # Leyenda compacta e inequívoca de correspondencia de columnas
-        _render_leyenda_columnas(encabezados)
-
         # Previsualización COMPLETA con scroll vertical y horizontal
         if filas_datos:
             if total_datos <= 100:
@@ -627,11 +618,11 @@ def _flujo_docx(contenido: bytes, hash_archivo: str, candidatos_previos: list, c
                 hide_index=False,
             )
 
-        # Sección destacada: Columna en Configuración y Vista Rápida
-        _render_columna_en_configuracion(encabezados, filas_datos, hash_archivo)
-
         mapeo = _selector_mapeo_columnas(encabezados, hash_archivo)
         campos_mapeados = [v for v in mapeo.values() if v]
+
+        # Referencia activa en archivo importado (aparece al modificar un selector)
+        _render_referencia_activa(encabezados, filas_datos, hash_archivo)
 
         if not campos_mapeados:
             st.info("Mapee al menos una columna.")
@@ -779,35 +770,19 @@ def _etiqueta_columna(idx: int, encabezado: str) -> str:
     return f"🔷 {letra} · Col. {idx}: {enc_limpio}"
 
 
-def _render_leyenda_columnas(encabezados: list[str]) -> None:
-    """
-    Renderiza una leyenda compacta, legible y multinivel inmediatamente sobre la tabla de previsualización.
-    Permite identificar claramente cada columna por Letra Excel, índice base cero y encabezado.
-    """
-    if not encabezados:
-        return
-    items = [_etiqueta_columna(i, h) for i, h in enumerate(encabezados)]
-    st.markdown(
-        "**Leyenda de columnas:** " + " &nbsp;│&nbsp; ".join([f"`{it}`" for it in items])
-    )
-
-
-def _render_columna_en_configuracion(
+def _render_referencia_activa(
     encabezados: list[str],
     filas_datos: list[list],
     key_base: str,
 ) -> None:
     """
-    Renderiza la sección destacada '🔷 COLUMNA EN CONFIGURACIÓN' y la vista rápida de valores reales.
-    Usa st.session_state['columna_mapeo_activa'] (transitoria y de solo lectura de interfaz).
+    Muestra la referencia activa en el archivo importado únicamente si el usuario
+    ha modificado algún selector de mapeo en la sesión.
+    Si no hay columna activa seleccionada, no renderiza nada (cero ruido visual).
     """
-    st.markdown("---")
-    st.markdown("#### 🔷 COLUMNA EN CONFIGURACIÓN")
-
     col_activa_idx = st.session_state.get("columna_mapeo_activa")
 
     if col_activa_idx is None or col_activa_idx < 0 or col_activa_idx >= len(encabezados):
-        st.info("Seleccione una columna de mapeo para ver su detalle.")
         return
 
     letra = _indice_a_letra_excel(col_activa_idx)
@@ -820,23 +795,10 @@ def _render_columna_en_configuracion(
     else:
         destino_label = "(No mapear)"
 
-    # Tarjeta compacta de contexto (paleta azul / gris azulado)
-    st.markdown(
-        f"""
-        <div style="background-color: #f0f4f8; border-left: 4px solid #1E88E5; padding: 12px 16px; border-radius: 6px; margin-bottom: 12px;">
-            <div style="font-weight: 700; font-size: 1.05rem; color: #1E3A8A;">
-                {letra} · Col. {col_activa_idx} — {enc_limpio}
-            </div>
-            <div style="margin-top: 6px; font-size: 0.95rem; color: #334155;">
-                <strong>Destino RAT actual:</strong> {destino_label}
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    # Vista rápida de valores reales de la columna activa
-    st.markdown(f"**Vista rápida: {letra} · Col. {col_activa_idx} — {enc_limpio}**")
+    st.markdown("---")
+    st.markdown("#### 🔷 Referencia activa en archivo importado")
+    st.markdown(f"**{letra} · Col. {col_activa_idx} — {enc_limpio}**")
+    st.markdown(f"**Campo RAT elegido:** {destino_label}")
 
     if not filas_datos:
         st.caption("No hay datos disponibles para esta columna.")
@@ -851,7 +813,7 @@ def _render_columna_en_configuracion(
         valor_str = str(valor_raw).strip() if valor_raw is not None else ""
         filas_vista.append({
             "Fila de origen": idx_f,
-            "Valor": valor_str if valor_str else "(vacío)",
+            "Valor de la columna": valor_str if valor_str else "(vacío)",
         })
 
     if total_filas > 25:
@@ -880,9 +842,8 @@ def _selector_mapeo_columnas(encabezados: list[str], key_base: str) -> dict:
     cols = st.columns(min(len(encabezados), 3))
     for idx, enc in enumerate(encabezados):
         col = cols[idx % len(cols)]
-        letra = _indice_a_letra_excel(idx)
         enc_limpio = str(enc).strip() if enc and str(enc).strip() else "Sin encabezado"
-        label_selector = f"🔷 {letra} · Col. {idx}: `{enc_limpio[:25]}`"
+        label_selector = f"Col. {idx} — {enc_limpio[:25]}"
 
         sel = col.selectbox(
             label_selector,
