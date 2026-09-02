@@ -780,8 +780,10 @@ def _render_referencia_activa(
     ha modificado algún selector de mapeo en la sesión.
     Si no hay columna activa seleccionada, no renderiza nada (cero ruido visual).
     """
-    col_activa_idx = st.session_state.get("columna_mapeo_activa")
+    if "columna_mapeo_activa" not in st.session_state:
+        return
 
+    col_activa_idx = st.session_state.get("columna_mapeo_activa")
     if col_activa_idx is None or col_activa_idx < 0 or col_activa_idx >= len(encabezados):
         return
 
@@ -795,8 +797,8 @@ def _render_referencia_activa(
     else:
         destino_label = "(No mapear)"
 
-    st.markdown("---")
-    st.markdown("#### 🔷 Referencia activa en archivo importado")
+    st.markdown("──────────────────────────────────────────────────")
+    st.markdown("**🔷 Referencia activa en archivo importado**")
     st.markdown(f"**{letra} · Col. {col_activa_idx} — {enc_limpio}**")
     st.markdown(f"**Campo RAT elegido:** {destino_label}")
 
@@ -843,7 +845,7 @@ def _selector_mapeo_columnas(encabezados: list[str], key_base: str) -> dict:
     for idx, enc in enumerate(encabezados):
         col = cols[idx % len(cols)]
         enc_limpio = str(enc).strip() if enc and str(enc).strip() else "Sin encabezado"
-        label_selector = f"Col. {idx} — {enc_limpio[:25]}"
+        label_selector = f"Col. {idx} — {enc_limpio}"
 
         sel = col.selectbox(
             label_selector,
