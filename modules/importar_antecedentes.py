@@ -451,8 +451,9 @@ def _flujo_xlsx(contenido: bytes, hash_archivo: str, candidatos_previos: list, c
         return [], [], [], 0, 0
 
     st.markdown(f"**Total filas de datos detectadas:** {total_datos} | **Columnas:** {len(encabezados)}")
-    st.markdown("**Encabezados:**")
-    st.code(", ".join(encabezados))
+
+    # Leyenda compacta e inequívoca de correspondencia de columnas
+    _render_leyenda_columnas(encabezados)
 
     if datos:
         if total_datos <= 100:
@@ -468,6 +469,9 @@ def _flujo_xlsx(contenido: bytes, hash_archivo: str, candidatos_previos: list, c
             height=380,
             hide_index=False,
         )
+
+    # Sección destacada: Columna en Configuración y Vista Rápida
+    _render_columna_en_configuracion(encabezados, datos, hash_archivo)
 
     mapeo = _selector_mapeo_columnas(encabezados, hash_archivo)
     campos_mapeados = [v for v in mapeo.values() if v]
@@ -507,8 +511,9 @@ def _flujo_csv(contenido: bytes, hash_archivo: str, candidatos_previos: list, co
         return [], [], [], 0, 0
 
     st.markdown(f"**Delimitador:** `{repr(delimitador)}` | **Total filas:** {total_datos} | **Columnas:** {len(encabezados)}")
-    if encabezados:
-        st.code(", ".join(encabezados))
+
+    # Leyenda compacta e inequívoca de correspondencia de columnas
+    _render_leyenda_columnas(encabezados)
 
     if datos:
         if total_datos <= 100:
@@ -524,6 +529,9 @@ def _flujo_csv(contenido: bytes, hash_archivo: str, candidatos_previos: list, co
             height=380,
             hide_index=False,
         )
+
+    # Sección destacada: Columna en Configuración y Vista Rápida
+    _render_columna_en_configuracion(encabezados, datos, hash_archivo)
 
     mapeo = _selector_mapeo_columnas(encabezados, hash_archivo)
     campos_mapeados = [v for v in mapeo.values() if v]
@@ -599,8 +607,9 @@ def _flujo_docx(contenido: bytes, hash_archivo: str, candidatos_previos: list, c
         filas_datos = tabla_sel.get("filas_datos") or (tabla_sel["filas_texto"][1:] if len(tabla_sel.get("filas_texto", [])) > 1 else [])
 
         st.markdown(f"**Total filas de datos detectadas:** {total_datos} | **Columnas:** {len(encabezados)}")
-        st.markdown("**Encabezados:**")
-        st.code(", ".join(encabezados))
+
+        # Leyenda compacta e inequívoca de correspondencia de columnas
+        _render_leyenda_columnas(encabezados)
 
         # Previsualización COMPLETA con scroll vertical y horizontal
         if filas_datos:
@@ -617,6 +626,9 @@ def _flujo_docx(contenido: bytes, hash_archivo: str, candidatos_previos: list, c
                 height=380,
                 hide_index=False,
             )
+
+        # Sección destacada: Columna en Configuración y Vista Rápida
+        _render_columna_en_configuracion(encabezados, filas_datos, hash_archivo)
 
         mapeo = _selector_mapeo_columnas(encabezados, hash_archivo)
         campos_mapeados = [v for v in mapeo.values() if v]
@@ -743,8 +755,117 @@ def _flujo_texto(contenido: bytes, hash_archivo: str, candidatos_previos: list, 
 
 
 # ==============================================================================
-# WIDGETS AUXILIARES
+# HELPERS DE TRAZABILIDAD VISUAL DE COLUMNAS (FASE 2A.2)
 # ==============================================================================
+
+def _indice_a_letra_excel(idx: int) -> str:
+    """
+    Convierte un índice base cero a nomenclatura de columnas tipo Excel:
+    0 -> A, 1 -> B, 25 -> Z, 26 -> AA, 27 -> AB, 51 -> AZ, 52 -> BA.
+    Determinista, puro y sin dependencias externas.
+    """
+    resultado = []
+    n = idx + 1
+    while n > 0:
+        n, residuo = divmod(n - 1, 26)
+        resultado.append(chr(65 + residuo))
+    return "".join(reversed(resultado))
+
+
+def _etiqueta_columna(idx: int, encabezado: str) -> str:
+    """Genera la etiqueta visual uniforme: 🔷 {letra} · Col. {idx}: {encabezado}."""
+    letra = _indice_a_letra_excel(idx)
+    enc_limpio = str(encabezado).strip() if encabezado and str(encabezado).strip() else "Sin encabezado"
+    return f"🔷 {letra} · Col. {idx}: {enc_limpio}"
+
+
+def _render_leyenda_columnas(encabezados: list[str]) -> None:
+    """
+    Renderiza una leyenda compacta, legible y multinivel inmediatamente sobre la tabla de previsualización.
+    Permite identificar claramente cada columna por Letra Excel, índice base cero y encabezado.
+    """
+    if not encabezados:
+        return
+    items = [_etiqueta_columna(i, h) for i, h in enumerate(encabezados)]
+    st.markdown(
+        "**Leyenda de columnas:** " + " &nbsp;│&nbsp; ".join([f"`{it}`" for it in items])
+    )
+
+
+def _render_columna_en_configuracion(
+    encabezados: list[str],
+    filas_datos: list[list],
+    key_base: str,
+) -> None:
+    """
+    Renderiza la sección destacada '🔷 COLUMNA EN CONFIGURACIÓN' y la vista rápida de valores reales.
+    Usa st.session_state['columna_mapeo_activa'] (transitoria y de solo lectura de interfaz).
+    """
+    st.markdown("---")
+    st.markdown("#### 🔷 COLUMNA EN CONFIGURACIÓN")
+
+    col_activa_idx = st.session_state.get("columna_mapeo_activa")
+
+    if col_activa_idx is None or col_activa_idx < 0 or col_activa_idx >= len(encabezados):
+        st.info("Seleccione una columna de mapeo para ver su detalle.")
+        return
+
+    letra = _indice_a_letra_excel(col_activa_idx)
+    enc = encabezados[col_activa_idx]
+    enc_limpio = str(enc).strip() if enc and str(enc).strip() else "Sin encabezado"
+
+    destino_valor_widget = st.session_state.get(f"mapeo_{key_base}_{col_activa_idx}")
+    if destino_valor_widget and destino_valor_widget != "(No mapear)":
+        destino_label = destino_valor_widget
+    else:
+        destino_label = "(No mapear)"
+
+    # Tarjeta compacta de contexto (paleta azul / gris azulado)
+    st.markdown(
+        f"""
+        <div style="background-color: #f0f4f8; border-left: 4px solid #1E88E5; padding: 12px 16px; border-radius: 6px; margin-bottom: 12px;">
+            <div style="font-weight: 700; font-size: 1.05rem; color: #1E3A8A;">
+                {letra} · Col. {col_activa_idx} — {enc_limpio}
+            </div>
+            <div style="margin-top: 6px; font-size: 0.95rem; color: #334155;">
+                <strong>Destino RAT actual:</strong> {destino_label}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Vista rápida de valores reales de la columna activa
+    st.markdown(f"**Vista rápida: {letra} · Col. {col_activa_idx} — {enc_limpio}**")
+
+    if not filas_datos:
+        st.caption("No hay datos disponibles para esta columna.")
+        return
+
+    total_filas = len(filas_datos)
+    filas_a_mostrar = filas_datos if total_filas <= 25 else filas_datos[:25]
+
+    filas_vista = []
+    for idx_f, fila in enumerate(filas_a_mostrar, start=1):
+        valor_raw = fila[col_activa_idx] if col_activa_idx < len(fila) else ""
+        valor_str = str(valor_raw).strip() if valor_raw is not None else ""
+        filas_vista.append({
+            "Fila de origen": idx_f,
+            "Valor": valor_str if valor_str else "(vacío)",
+        })
+
+    if total_filas > 25:
+        st.caption(
+            f"Mostrando 25 de {total_filas} valores de esta columna. La extracción considera todas las filas útiles."
+        )
+
+    st.dataframe(
+        pd.DataFrame(filas_vista),
+        use_container_width=True,
+        height=min(280, 40 + len(filas_vista) * 35),
+        hide_index=True,
+    )
+
 
 def _selector_mapeo_columnas(encabezados: list[str], key_base: str) -> dict:
     """Muestra un selector para mapear cada columna del archivo a un campo RAT."""
@@ -752,14 +873,23 @@ def _selector_mapeo_columnas(encabezados: list[str], key_base: str) -> dict:
     opciones_rat = ["(No mapear)"] + [f"{k} — {v}" for k, v in CAMPOS_RAT_ETIQUETAS.items()]
     claves_rat = [None] + CAMPOS_RAT_CLAVES
 
+    def _on_cambio_columna(i: int):
+        st.session_state["columna_mapeo_activa"] = i
+
     mapeo = {}
     cols = st.columns(min(len(encabezados), 3))
     for idx, enc in enumerate(encabezados):
         col = cols[idx % len(cols)]
+        letra = _indice_a_letra_excel(idx)
+        enc_limpio = str(enc).strip() if enc and str(enc).strip() else "Sin encabezado"
+        label_selector = f"🔷 {letra} · Col. {idx}: `{enc_limpio[:25]}`"
+
         sel = col.selectbox(
-            f"Col. {idx}: `{enc[:25]}`",
+            label_selector,
             opciones_rat,
             key=f"mapeo_{key_base}_{idx}",
+            on_change=_on_cambio_columna,
+            args=(idx,),
         )
         mapeo[idx] = claves_rat[opciones_rat.index(sel)]
     return mapeo
