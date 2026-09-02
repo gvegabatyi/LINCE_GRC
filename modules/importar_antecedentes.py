@@ -9,6 +9,8 @@ PRINCIPIO FUNDAMENTAL:
 - La importación no afecta la completitud documental MPI hasta validación manual.
 - Las actualizaciones a tratamientos existentes requieren comparación campo a campo
   y confirmación humana explícita campo por campo.
+- Previsualización completa: las tablas interactivas reciben todas las filas detectadas
+  con desplazamiento vertical y horizontal (soporta ampliación en pantalla completa sin recortes).
 
 Normativa de referencia:
 - Decreto N° 662, Art. 3 letra d), numerales i a xi (estructura del RAT).
@@ -166,7 +168,6 @@ def _tab_nueva_importacion() -> None:
         st.caption("Aguardando archivo…")
         return
 
-    # Leer contenido en memoria
     contenido = archivo.read()
 
     # Control de sesión: contador acumulado
@@ -198,7 +199,6 @@ def _tab_nueva_importacion() -> None:
     for adv in advertencias_formato:
         st.warning(f"⚠️ {adv}")
 
-    # Hash y detección de duplicado
     hash_archivo = calcular_hash_sha256(contenido)
     tamano_kb = len(contenido) / 1024
 
@@ -290,7 +290,6 @@ def _tab_nueva_importacion() -> None:
         icon="🛡️",
     )
 
-    # Tabla visual completa para verificar que todas las filas útiles están presentes
     resumen_cands = []
     for idx_c, cand in enumerate(candidatos_generados, start=1):
         dj = cand["datos_extraidos_json"]
@@ -303,7 +302,7 @@ def _tab_nueva_importacion() -> None:
             "Nombre del Tratamiento (candidato)": nom,
             "Campos RAT con dato": campos_con_dato,
         })
-    st.dataframe(pd.DataFrame(resumen_cands), use_container_width=True)
+    st.dataframe(pd.DataFrame(resumen_cands), use_container_width=True, height=350)
 
     # ── PASO 7: Evidencia URL ──────────────────────────────────────────────────
     st.subheader("Paso 7 — Vincular evidencia documental de origen (opcional)")
@@ -326,7 +325,6 @@ def _tab_nueva_importacion() -> None:
     # ── PASO 8: Registrar o completar importación en bandeja ───────────────────
     st.subheader("Paso 8 — Confirmar y guardar candidatos en la bandeja")
 
-    # Revisar si ya existen candidatos en la BD para este archivo
     cands_previos_en_bd = 0
     id_importacion_existente = None
     if dup:
@@ -361,7 +359,6 @@ def _tab_nueva_importacion() -> None:
                 advertencias=advertencias_list,
             )
 
-            # Reutilizar importación si ya existe para este hash o crear nueva
             if id_importacion_existente:
                 imp_id = id_importacion_existente
             else:
@@ -383,7 +380,6 @@ def _tab_nueva_importacion() -> None:
                     st.error(f"Error al registrar la importación: {msg_imp}")
                     return
 
-            # Insertar únicamente los candidatos no existentes (prevención de duplicados)
             insertados = 0
             omitidos_duplicados = 0
             errores_cand = 0
@@ -413,11 +409,9 @@ def _tab_nueva_importacion() -> None:
             actualizar_estado_importacion(imp_id, "con_candidatos", total_candidatos=total_en_bd)
             actualizar_contadores_importacion(imp_id)
 
-            # Actualizar contadores de sesión
             st.session_state["imp_bytes_sesion"] = bytes_sesion + len(contenido)
             st.session_state["imp_archivos_sesion"] = archivos_sesion + 1
 
-            # Limpiar estado temporal
             st.session_state.pop(f"imp_candidatos_{hash_archivo}", None)
             st.session_state.pop(f"imp_cols_{hash_archivo}", None)
             st.session_state.pop(f"imp_campos_{hash_archivo}", None)
@@ -437,7 +431,7 @@ def _tab_nueva_importacion() -> None:
 # ==============================================================================
 
 def _flujo_xlsx(contenido: bytes, hash_archivo: str, candidatos_previos: list, conservar_adicionales: bool) -> tuple[list, list, list, int, int]:
-    """Flujo interactivo de extracción para XLSX."""
+    """Flujo interactivo de extracción para XLSX con previsualización completa."""
     try:
         hojas = extraer_xlsx_hojas(contenido)
     except ValueError as exc:
@@ -447,7 +441,7 @@ def _flujo_xlsx(contenido: bytes, hash_archivo: str, candidatos_previos: list, c
     hoja_sel = st.selectbox("Seleccionar hoja", hojas, key=f"xlsx_hoja_{hash_archivo}")
 
     try:
-        encabezados, preview, total_datos = extraer_xlsx_encabezados_preview(contenido, hoja_sel)
+        encabezados, datos, total_datos = extraer_xlsx_encabezados_preview(contenido, hoja_sel)
     except ValueError as exc:
         st.error(str(exc))
         return [], [], [], 0, 0
@@ -460,9 +454,20 @@ def _flujo_xlsx(contenido: bytes, hash_archivo: str, candidatos_previos: list, c
     st.markdown("**Encabezados:**")
     st.code(", ".join(encabezados))
 
-    if preview:
-        st.caption(f"Mostrando muestra de las primeras {len(preview)} filas de datos:")
-        st.dataframe(pd.DataFrame(preview, columns=encabezados), use_container_width=True)
+    if datos:
+        if total_datos <= 100:
+            st.caption(f"Mostrando las {total_datos} filas de datos detectadas. Usa el desplazamiento vertical y horizontal para recorrer la tabla completa.")
+            df_mostrar = pd.DataFrame(datos, columns=encabezados)
+        else:
+            st.caption(f"Mostrando 100 de {total_datos} filas de datos por rendimiento. La extracción procesará todas las filas útiles detectadas.")
+            df_mostrar = pd.DataFrame(datos[:100], columns=encabezados)
+
+        st.dataframe(
+            df_mostrar,
+            use_container_width=True,
+            height=380,
+            hide_index=False,
+        )
 
     mapeo = _selector_mapeo_columnas(encabezados, hash_archivo)
     campos_mapeados = [v for v in mapeo.values() if v]
@@ -494,9 +499,9 @@ def _flujo_xlsx(contenido: bytes, hash_archivo: str, candidatos_previos: list, c
 
 
 def _flujo_csv(contenido: bytes, hash_archivo: str, candidatos_previos: list, conservar_adicionales: bool) -> tuple[list, list, list, int, int]:
-    """Flujo interactivo de extracción para CSV."""
+    """Flujo interactivo de extracción para CSV con previsualización completa."""
     try:
-        encabezados, preview, delimitador, total_datos = extraer_csv_encabezados_preview(contenido)
+        encabezados, datos, delimitador, total_datos = extraer_csv_encabezados_preview(contenido)
     except Exception as exc:
         st.error(f"Error al leer el CSV: {exc}")
         return [], [], [], 0, 0
@@ -504,9 +509,21 @@ def _flujo_csv(contenido: bytes, hash_archivo: str, candidatos_previos: list, co
     st.markdown(f"**Delimitador:** `{repr(delimitador)}` | **Total filas:** {total_datos} | **Columnas:** {len(encabezados)}")
     if encabezados:
         st.code(", ".join(encabezados))
-    if preview:
-        st.caption(f"Mostrando muestra de las primeras {len(preview)} filas de datos:")
-        st.dataframe(pd.DataFrame(preview, columns=encabezados), use_container_width=True)
+
+    if datos:
+        if total_datos <= 100:
+            st.caption(f"Mostrando las {total_datos} filas de datos detectadas. Usa el desplazamiento vertical y horizontal para recorrer la tabla completa.")
+            df_mostrar = pd.DataFrame(datos, columns=encabezados)
+        else:
+            st.caption(f"Mostrando 100 de {total_datos} filas de datos por rendimiento. La extracción procesará todas las filas útiles detectadas.")
+            df_mostrar = pd.DataFrame(datos[:100], columns=encabezados)
+
+        st.dataframe(
+            df_mostrar,
+            use_container_width=True,
+            height=380,
+            hide_index=False,
+        )
 
     mapeo = _selector_mapeo_columnas(encabezados, hash_archivo)
     campos_mapeados = [v for v in mapeo.values() if v]
@@ -538,7 +555,7 @@ def _flujo_csv(contenido: bytes, hash_archivo: str, candidatos_previos: list, co
 
 
 def _flujo_docx(contenido: bytes, hash_archivo: str, candidatos_previos: list, conservar_adicionales: bool) -> tuple[list, list, list, int, int]:
-    """Flujo interactivo de extracción para DOCX con soporte integral de filas útiles."""
+    """Flujo interactivo de extracción para DOCX con previsualización completa de todas las filas."""
     try:
         estructura = extraer_docx_estructura(contenido)
     except ImportError:
@@ -579,16 +596,26 @@ def _flujo_docx(contenido: bytes, hash_archivo: str, candidatos_previos: list, c
         tabla_sel = tablas[idx_tabla]
         encabezados = tabla_sel["encabezados"]
         total_datos = tabla_sel["total_filas"]
+        filas_datos = tabla_sel.get("filas_datos") or (tabla_sel["filas_texto"][1:] if len(tabla_sel.get("filas_texto", [])) > 1 else [])
 
         st.markdown(f"**Total filas de datos detectadas:** {total_datos} | **Columnas:** {len(encabezados)}")
         st.markdown("**Encabezados:**")
         st.code(", ".join(encabezados))
 
-        if tabla_sel["filas_preview"]:
-            st.caption(f"Mostrando muestra de las primeras {len(tabla_sel['filas_preview'])} filas de datos (de un total de {total_datos}):")
+        # Previsualización COMPLETA con scroll vertical y horizontal
+        if filas_datos:
+            if total_datos <= 100:
+                st.caption(f"Mostrando las {total_datos} filas de datos detectadas. Usa el desplazamiento vertical y horizontal para recorrer la tabla completa.")
+                df_mostrar = pd.DataFrame(filas_datos, columns=encabezados)
+            else:
+                st.caption(f"Mostrando 100 de {total_datos} filas de datos por rendimiento. La extracción procesará todas las filas útiles detectadas.")
+                df_mostrar = pd.DataFrame(filas_datos[:100], columns=encabezados)
+
             st.dataframe(
-                pd.DataFrame(tabla_sel["filas_preview"], columns=encabezados),
+                df_mostrar,
                 use_container_width=True,
+                height=380,
+                hide_index=False,
             )
 
         mapeo = _selector_mapeo_columnas(encabezados, hash_archivo)
@@ -802,7 +829,6 @@ def _tab_revisar_candidatos() -> None:
         _mostrar_historial_revisados(empresa_id)
         return
 
-    # Selector de visualización / límite visible
     col_hdr1, col_hdr2 = st.columns([3, 1])
     with col_hdr1:
         st.info(f"**{len(df_cand)} candidato(s) pendiente(s)** de revisión para **{empresa_sel}**.")
@@ -820,14 +846,12 @@ def _tab_revisar_candidatos() -> None:
     if len(df_cand) > limite_vis:
         st.caption(f"Mostrando {limite_vis} de {len(df_cand)} candidatos pendientes.")
 
-    # Cargar tratamientos existentes para la comparación
     df_trat = get_tratamientos_df(empresa_id=empresa_id)
     opciones_trat = {"(Seleccionar tratamiento existente)": None}
     if not df_trat.empty:
         for _, r in df_trat.iterrows():
             opciones_trat[f"#{r['id']} — {r['nombre_tratamiento'][:55]}"] = int(r["id"])
 
-    # Evaluaciones
     df_eval = get_evaluaciones_df(empresa_id=empresa_id)
     opciones_eval_rev = {"(Sin evaluación)": None}
     if not df_eval.empty:
@@ -853,7 +877,6 @@ def _tab_revisar_candidatos() -> None:
             st.caption(f"📍 **Origen documental:** {origen_info}")
             st.caption("⚠️ **DATOS EXTRAÍDOS NO VALIDADOS — Requieren confirmación humana explícita**")
 
-            # Detectar coincidencia de nombre
             nombre_cand = datos_json.get("nombre_tratamiento", "")
             similar = (
                 detectar_candidato_similar_en_tratamientos(empresa_id, nombre_cand)

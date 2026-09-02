@@ -15,6 +15,7 @@ Principios:
 - Procesamiento de filas útiles: no se descarta ninguna fila útil con datos por campos incompletos.
 - Regla de combinación: columnas con el mismo destino se combinan con ' / ' sin sobrescritura destructiva.
 - Nombre de tratamiento por defecto: 'Nombre de tratamiento pendiente de identificación'.
+- Previsualización completa: expone todas las filas de datos para navegación interactiva sin recorte a 5 filas.
 """
 
 import io
@@ -128,7 +129,7 @@ def extraer_xlsx_hojas(contenido: bytes) -> list[str]:
 
 def extraer_xlsx_encabezados_preview(contenido: bytes, nombre_hoja: str) -> tuple[list[str], list[list], int]:
     """
-    Retorna (encabezados, primeras_filas_muestra, total_filas_datos) de la hoja seleccionada.
+    Retorna (encabezados, todas_filas_datos, total_filas_datos) de la hoja seleccionada.
     """
     try:
         import openpyxl
@@ -141,8 +142,7 @@ def extraer_xlsx_encabezados_preview(contenido: bytes, nombre_hoja: str) -> tupl
             return [], [], 0
         encabezados = filas[0]
         datos = filas[1:]
-        preview = datos[:5]
-        return encabezados, preview, len(datos)
+        return encabezados, datos, len(datos)
     except Exception as exc:
         raise ValueError(f"No se pudo leer la hoja '{nombre_hoja}': {exc}")
 
@@ -228,7 +228,7 @@ def generar_candidatos_xlsx(
 
 def extraer_csv_encabezados_preview(contenido: bytes) -> tuple[list[str], list[list], str, int]:
     """
-    Detecta delimitador y retorna (encabezados, primeras_filas_muestra, delimitador, total_filas_datos).
+    Detecta delimitador y retorna (encabezados, todas_filas_datos, delimitador, total_filas_datos).
     """
     import csv
 
@@ -246,10 +246,9 @@ def extraer_csv_encabezados_preview(contenido: bytes) -> tuple[list[str], list[l
     if not filas:
         return [], [], delimitador, 0
 
-    encabezados = filas[0]
-    datos = filas[1:]
-    preview = datos[:5]
-    return encabezados, preview, delimitador, len(datos)
+    encabezados = [c.strip() for c in filas[0]]
+    datos = [r for r in filas[1:]]
+    return encabezados, datos, delimitador, len(datos)
 
 
 def generar_candidatos_csv(
@@ -335,8 +334,9 @@ def extraer_docx_estructura(contenido: bytes) -> dict:
     Extrae la estructura completa del DOCX: tablas y secciones de párrafos.
     Para cada tabla reporta:
     - encabezados reales (fila 0)
-    - filas_preview (muestra de las primeras 5 filas)
-    - total_filas_datos (todas las filas de la tabla excepto encabezado)
+    - filas_datos completas (todas las filas de datos)
+    - filas_preview (primeras 5 filas de muestra)
+    - total_filas (total de filas de datos detectadas)
     - filas_texto completas
     """
     try:
@@ -365,6 +365,7 @@ def extraer_docx_estructura(contenido: bytes) -> dict:
             tablas.append({
                 "indice": idx_tabla,
                 "encabezados": encabezados,
+                "filas_datos": filas_datos,
                 "filas_preview": preview,
                 "total_filas": total_datos,
                 "filas_texto": filas_texto,
@@ -373,6 +374,7 @@ def extraer_docx_estructura(contenido: bytes) -> dict:
             tablas.append({
                 "indice": idx_tabla,
                 "encabezados": [],
+                "filas_datos": [],
                 "filas_preview": [],
                 "total_filas": 0,
                 "filas_texto": [],
