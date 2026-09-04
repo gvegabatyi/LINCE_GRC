@@ -112,10 +112,20 @@ _verificar_acceso_temporal()
 
 
 # ==============================================================================
-# INICIALIZACIÓN Y CONTROL DE BASE DE DATOS
+# INICIALIZACIÓN Y CONTROL DE BASE DE DATOS (UNA VEZ POR INSTANCIA)
 # ==============================================================================
-# Ejecuta validaciones y migraciones idempotentes de Fase 1 y Fase 2A (solo para usuarios autenticados)
-init_db()
+@st.cache_resource(show_spinner=False)
+def _inicializar_base_una_vez() -> bool:
+    """
+    Ejecuta validaciones y migraciones idempotentes de Fase 1 y Fase 2A
+    exactamente una vez por ciclo de vida de la instancia de Streamlit.
+    """
+    init_db()
+    return True
+
+
+# Ejecutar inicialización de base de datos solo después de confirmar autenticación
+_inicializar_base_una_vez()
 
 
 # ==============================================================================

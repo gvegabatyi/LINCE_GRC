@@ -44,7 +44,6 @@ from services.deduplicacion_service import (
     calcular_hash_sha256,
     validar_archivo,
     detectar_duplicado_empresa,
-    detectar_candidato_similar_en_tratamientos,
     EXTENSIONES_PERMITIDAS,
     MENSAJE_FORMATO_NO_SOPORTADO,
 )
@@ -1355,9 +1354,20 @@ def _tab_revisar_candidatos() -> None:
 
     df_trat = get_tratamientos_df(empresa_id=empresa_id)
     opciones_trat = {"(Seleccionar tratamiento existente)": None}
+    tratamientos_similares_map = {}
     if not df_trat.empty:
         for _, r in df_trat.iterrows():
             opciones_trat[f"#{r['id']} — {r['nombre_tratamiento'][:55]}"] = int(r["id"])
+            # Indexación en memoria para detección de similitud O(1) sin N+1 a Neon
+            # Reproduce exactamente: LOWER(TRIM(nombre_tratamiento))
+            nom_existente = str(r.get("nombre_tratamiento") or "").strip()
+            if nom_existente:
+                clave_norm = nom_existente.lower()
+                if clave_norm not in tratamientos_similares_map:
+                    tratamientos_similares_map[clave_norm] = {
+                        "id": int(r["id"]),
+                        "nombre_tratamiento": nom_existente,
+                    }
 
     df_eval = get_evaluaciones_df(empresa_id=empresa_id)
     opciones_eval_rev = {"(Sin evaluación)": None}
@@ -1385,9 +1395,15 @@ def _tab_revisar_candidatos() -> None:
             st.caption("⚠️ **DATOS EXTRAÍDOS NO VALIDADOS — Requieren confirmación humana explícita**")
 
             nombre_cand = datos_json.get("nombre_tratamiento", "")
+            nombre_cand_limpio = str(nombre_cand or "").strip()
+            nombre_cand_norm = nombre_cand_limpio.lower()
             similar = (
-                detectar_candidato_similar_en_tratamientos(empresa_id, nombre_cand)
-                if nombre_cand and nombre_cand != NOMBRE_TRATAMIENTO_DEFECTO
+                tratamientos_similares_map.get(nombre_cand_norm)
+                if (
+                    nombre_cand_norm
+                    and nombre_cand_limpio != NOMBRE_TRATAMIENTO_DEFECTO
+                    and nombre_cand_norm != NOMBRE_TRATAMIENTO_DEFECTO.strip().lower()
+                )
                 else None
             )
             if similar:
