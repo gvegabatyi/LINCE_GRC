@@ -333,30 +333,39 @@ def init_db() -> None:
         # Columnas opcionales — idempotentes — no destructivas
         # Permiten restaurar previsualización, mapeo y metadatos sin archivo
         # ==================================================================
-        c.execute("""
-            ALTER TABLE importaciones_documentales
-            ADD COLUMN IF NOT EXISTS tabla_origen VARCHAR(255);
-        """)
-        c.execute("""
-            ALTER TABLE importaciones_documentales
-            ADD COLUMN IF NOT EXISTS encabezados_json JSONB;
-        """)
-        c.execute("""
-            ALTER TABLE importaciones_documentales
-            ADD COLUMN IF NOT EXISTS datos_extraidos_json JSONB;
-        """)
-        c.execute("""
-            ALTER TABLE importaciones_documentales
-            ADD COLUMN IF NOT EXISTS mapeo_columnas_json JSONB;
-        """)
-        c.execute("""
-            ALTER TABLE importaciones_documentales
-            ADD COLUMN IF NOT EXISTS total_filas_origen INTEGER DEFAULT 0;
-        """)
-        c.execute("""
-            ALTER TABLE importaciones_documentales
-            ADD COLUMN IF NOT EXISTS total_filas_utiles INTEGER DEFAULT 0;
-        """)
+        print("[migrations] Aplicando Paso 7: persistencia de importaciones RAT...")
+        try:
+            with conn.cursor() as c_p7:
+                c_p7.execute("""
+                    ALTER TABLE importaciones_documentales
+                    ADD COLUMN IF NOT EXISTS tabla_origen VARCHAR(255);
+                """)
+                c_p7.execute("""
+                    ALTER TABLE importaciones_documentales
+                    ADD COLUMN IF NOT EXISTS encabezados_json JSONB;
+                """)
+                c_p7.execute("""
+                    ALTER TABLE importaciones_documentales
+                    ADD COLUMN IF NOT EXISTS datos_extraidos_json JSONB;
+                """)
+                c_p7.execute("""
+                    ALTER TABLE importaciones_documentales
+                    ADD COLUMN IF NOT EXISTS mapeo_columnas_json JSONB;
+                """)
+                c_p7.execute("""
+                    ALTER TABLE importaciones_documentales
+                    ADD COLUMN IF NOT EXISTS total_filas_origen INTEGER DEFAULT 0;
+                """)
+                c_p7.execute("""
+                    ALTER TABLE importaciones_documentales
+                    ADD COLUMN IF NOT EXISTS total_filas_utiles INTEGER DEFAULT 0;
+                """)
+            print("[migrations] Paso 7 completado correctamente.")
+        except Exception as exc:
+            raise RuntimeError(
+                f"Error en migración Paso 7 (persistencia importaciones RAT): "
+                f"[{type(exc).__name__}: {exc}]"
+            ) from exc
 
         # Confirmar toda la transacción de migración (Fase 1, 2A, 2A.2 y 2A.3)
         conn.commit()
