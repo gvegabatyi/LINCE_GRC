@@ -1,5 +1,5 @@
 """
-Repositorio de Importaciones Documentales — Fase 2A.2 (Lince GRC).
+Repositorio de Importaciones Documentales — Fase 2A.2 / 2A.3 (Lince GRC).
 
 CRUD para:
 - importaciones_documentales
@@ -7,12 +7,15 @@ CRUD para:
 
 No almacena archivos ni textos íntegros. Solo persiste metadatos, hash, resumen técnico,
 campos mapeados (máx. 4.000 caracteres por campo) y decisiones de revisión humana.
+
+Fase 2A.3 agrega persistencia de previsualización y mapeo (JSONB) para reapertura sin archivo.
 """
 
 import json
+import math
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date
 
 from db.connection import get_connection
 
@@ -505,3 +508,326 @@ def _v(campos: dict, clave: str) -> str | None:
     if isinstance(val, str) and val.strip():
         return val.strip()[:4000]
     return None
+
+
+# ==============================================================================
+# FASE 2A.3: PERSISTENCIA DE REAPERTURA
+# Guardar y recuperar previsualización, encabezados y mapeo sin archivo binario
+# ==============================================================================
+
+def _sanitizar_valor(v) -> str:
+    """Convierte cualquier valor no serializable a string vacío o string limpio."""
+    if v is None:
+        return ""
+    if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+        return ""
+    if isinstance(v, (datetime, date)):
+        return str(v)
+    try:
+        # Detecta pd.NA, pd.NaT y similares sin importar pandas aquí
+        if str(type(v)) in ("<class 'pandas._libs.missing.NAType'>",
+                            "<class 'pandas._libs.tslibs.nattype.NaTType'>"):
+            return ""
+    except Exception:
+        pass
+    try:
+        s = str(v).strip()
+        return s
+    except Exception:
+        return ""
+
+
+def _sanitizar_matriz(filas: list[list]) -> list[list]:
+    """
+    Convierte todos los valores de la matriz a strings seguros para JSONB.
+    NaN, None, pd.NA, fechas y objetos no serializables se convierten a ''.
+    """
+    return [[_sanitizar_valor(celda) for celda in fila] for fila in filas]
+
+
+def _sanitizar_encabezados(encabezados: list) -> list[str]:
+    """Convierte encabezados a strings seguros para JSONB."""
+    return [_sanitizar_valor(e) if _sanitizar_valor(e) else "Sin encabezado" for e in encabezados]
+
+
+def _sanitizar_mapeo(mapeo: dict) -> dict:
+    """
+    Convierte el mapeo de columnas a dict serializable con claves de columna (str)
+    y como valor el identificador interno canónico ('nombre_tratamiento', 'rat_tipo_datos_sensibles', etc.)
+    o '(No mapear)'. Si recibe una etiqueta decorada con ' — ', extrae solo el identificador canónico.
+    """
+    resultado = {}
+    for k, v in mapeo.items():
+        clave_str = str(k)
+        if v is None or v == "(No mapear)" or v == "":
+            resultado[clave_str] = "(No mapear)"
+        else:
+            val_str = str(v).strip()
+            if " — " in val_str:
+                val_str = val_str.split(" — ")[0].strip()
+            resultado[clave_str] = val_str
+    return resultado
+
+
+def guardar_importacion_completa(
+    empresa_id: int,
+    nombre_archivo: str,
+    tipo_archivo: str,
+    hash_sha256: str,
+    tamano_bytes: int,
+    tabla_origen: str,
+    encabezados: list,
+    filas_datos: list[list],
+    mapeo_columnas: dict,
+    total_filas_origen: int,
+    total_filas_utiles: int,
+    evaluacion_id: int | None = None,
+    descripcion_origen: str = "",
+    resumen_extraccion: str = "",
+    advertencias: str = "",
+    importacion_id_existente: int | None = None,
+) -> tuple[int | None, str]:
+    """
+    Persiste o actualiza la estructura completa de una importación RAT.
+
+    - Si importacion_id_existente es válido y pertenece a la empresa, ejecuta UPDATE.
+    - Si ya existe un registro con (empresa_id, hash_sha256), ejecuta UPDATE sobre ese ID.
+    - Si no existe, ejecuta INSERT.
+    - Sanitiza encabezados, filas y mapeo antes de serializar a JSONB.
+    - Retorna (importacion_id, mensaje).
+    """
+    conn = None
+    try:
+        enc_limpio = _sanitizar_encabezados(encabezados)
+        filas_limpias = _sanitizar_matriz(filas_datos)
+        mapeo_limpio = _sanitizar_mapeo(mapeo_columnas)
+        tabla_limpia = (tabla_origen or "").strip()[:255]
+
+        conn = get_connection()
+        with conn.cursor() as c:
+            # Resolver ID de importación a actualizar
+            imp_id = None
+
+            if importacion_id_existente:
+                c.execute(
+                    "SELECT id FROM importaciones_documentales WHERE id = %s AND empresa_id = %s",
+                    (importacion_id_existente, empresa_id),
+                )
+                row = c.fetchone()
+                if row:
+                    imp_id = row[0]
+
+            if imp_id is None:
+                c.execute(
+                    "SELECT id FROM importaciones_documentales WHERE empresa_id = %s AND hash_sha256 = %s ORDER BY id DESC LIMIT 1",
+                    (empresa_id, hash_sha256),
+                )
+                row = c.fetchone()
+                if row:
+                    imp_id = row[0]
+
+            if imp_id is not None:
+                c.execute(
+                    """
+                    UPDATE importaciones_documentales SET
+                        tabla_origen          = %s,
+                        encabezados_json      = %s,
+                        datos_extraidos_json  = %s,
+                        mapeo_columnas_json   = %s,
+                        total_filas_origen    = %s,
+                        total_filas_utiles    = %s,
+                        descripcion_origen    = COALESCE(NULLIF(%s, ''), descripcion_origen),
+                        resumen_extraccion    = COALESCE(NULLIF(%s, ''), resumen_extraccion),
+                        advertencias          = COALESCE(NULLIF(%s, ''), advertencias),
+                        updated_at            = CURRENT_TIMESTAMP
+                    WHERE id = %s AND empresa_id = %s
+                    """,
+                    (
+                        tabla_limpia,
+                        json.dumps(enc_limpio, ensure_ascii=False),
+                        json.dumps(filas_limpias, ensure_ascii=False),
+                        json.dumps(mapeo_limpio, ensure_ascii=False),
+                        total_filas_origen,
+                        total_filas_utiles,
+                        descripcion_origen.strip() if descripcion_origen else "",
+                        resumen_extraccion.strip() if resumen_extraccion else "",
+                        advertencias.strip() if advertencias else "",
+                        imp_id,
+                        empresa_id,
+                    ),
+                )
+                conn.commit()
+                return imp_id, f"Importación #{imp_id} actualizada con previsualización y mapeo."
+
+            else:
+                c.execute(
+                    """
+                    INSERT INTO importaciones_documentales (
+                        empresa_id, evaluacion_id, nombre_archivo, tipo_archivo,
+                        mime_detectado, tamano_bytes, hash_sha256, estado,
+                        descripcion_origen, advertencias, resumen_extraccion,
+                        tabla_origen, encabezados_json, datos_extraidos_json,
+                        mapeo_columnas_json, total_filas_origen, total_filas_utiles
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, 'recibido',
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    ) RETURNING id
+                    """,
+                    (
+                        empresa_id,
+                        evaluacion_id,
+                        nombre_archivo,
+                        tipo_archivo,
+                        tipo_archivo,
+                        tamano_bytes,
+                        hash_sha256,
+                        descripcion_origen.strip() if descripcion_origen else None,
+                        advertencias.strip() if advertencias else None,
+                        resumen_extraccion.strip() if resumen_extraccion else None,
+                        tabla_limpia,
+                        json.dumps(enc_limpio, ensure_ascii=False),
+                        json.dumps(filas_limpias, ensure_ascii=False),
+                        json.dumps(mapeo_limpio, ensure_ascii=False),
+                        total_filas_origen,
+                        total_filas_utiles,
+                    ),
+                )
+                new_id = c.fetchone()[0]
+                conn.commit()
+                return new_id, f"Importación #{new_id} guardada con previsualización y mapeo."
+
+    except Exception as exc:
+        if conn:
+            conn.rollback()
+        return None, f"Error al guardar importación ({type(exc).__name__}): {exc}"
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_importacion_por_id(importacion_id: int, empresa_id: int) -> dict | None:
+    """
+    Recupera una importación completa (incluyendo JSONB de Fase 2A.3) validando
+    que pertenezca estrictamente a la empresa_id indicada.
+    Si el ID no existe o pertenece a otra empresa, retorna None sin exponer datos.
+    Los campos JSONB se decodifican a estructuras Python nativas.
+    """
+    conn = None
+    try:
+        conn = get_connection()
+        with conn.cursor() as c:
+            c.execute(
+                """
+                SELECT
+                    id,
+                    empresa_id,
+                    nombre_archivo,
+                    tipo_archivo,
+                    tamano_bytes,
+                    hash_sha256,
+                    estado,
+                    descripcion_origen,
+                    resumen_extraccion,
+                    advertencias,
+                    tabla_origen,
+                    encabezados_json,
+                    datos_extraidos_json,
+                    mapeo_columnas_json,
+                    total_filas_origen,
+                    total_filas_utiles,
+                    total_candidatos,
+                    candidatos_creados,
+                    candidatos_ignorados,
+                    created_at,
+                    updated_at
+                FROM importaciones_documentales
+                WHERE id = %s AND empresa_id = %s
+                """,
+                (importacion_id, empresa_id),
+            )
+            row = c.fetchone()
+            if row is None:
+                return None
+
+            (
+                r_id, r_empresa_id, r_nombre, r_tipo, r_tamano, r_hash,
+                r_estado, r_desc, r_resumen, r_adv,
+                r_tabla, r_enc_raw, r_datos_raw, r_mapeo_raw,
+                r_total_origen, r_total_utiles,
+                r_total_cand, r_cand_creados, r_cand_ign,
+                r_created, r_updated,
+            ) = row
+
+            def _parse_json(raw):
+                if raw is None:
+                    return None
+                if isinstance(raw, (list, dict)):
+                    return raw
+                try:
+                    return json.loads(raw)
+                except Exception:
+                    return None
+
+            return {
+                "id": r_id,
+                "empresa_id": r_empresa_id,
+                "nombre_archivo": r_nombre,
+                "tipo_archivo": r_tipo,
+                "tamano_bytes": r_tamano,
+                "hash_sha256": r_hash,
+                "estado": r_estado,
+                "descripcion_origen": r_desc or "",
+                "resumen_extraccion": r_resumen or "",
+                "advertencias": r_adv or "",
+                "tabla_origen": r_tabla or "",
+                "encabezados": _parse_json(r_enc_raw) or [],
+                "filas_datos": _parse_json(r_datos_raw) or [],
+                "mapeo_columnas": _parse_json(r_mapeo_raw) or {},
+                "total_filas_origen": r_total_origen or 0,
+                "total_filas_utiles": r_total_utiles or 0,
+                "total_candidatos": r_total_cand or 0,
+                "candidatos_creados": r_cand_creados or 0,
+                "candidatos_ignorados": r_cand_ign or 0,
+                "created_at": r_created,
+                "updated_at": r_updated,
+            }
+    except Exception:
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_importaciones_reabribles_df(empresa_id: int) -> pd.DataFrame:
+    """
+    Retorna las importaciones de la empresa que tienen datos de reapertura
+    (encabezados y datos_extraidos_json no nulos), ordenadas por más recientes primero.
+    Solo expone campos seguros para el selector de interfaz — nunca datos de otra empresa.
+    """
+    conn = None
+    try:
+        conn = get_connection()
+        query = """
+            SELECT
+                id,
+                nombre_archivo,
+                tipo_archivo,
+                estado,
+                tabla_origen,
+                total_filas_origen,
+                total_filas_utiles,
+                total_candidatos,
+                created_at,
+                updated_at
+            FROM importaciones_documentales
+            WHERE empresa_id = %s
+              AND encabezados_json IS NOT NULL
+              AND datos_extraidos_json IS NOT NULL
+            ORDER BY id DESC
+        """
+        return pd.read_sql_query(query, conn, params=(empresa_id,))
+    except Exception:
+        return pd.DataFrame()
+    finally:
+        if conn:
+            conn.close()

@@ -328,7 +328,37 @@ def init_db() -> None:
                 ON importacion_tratamientos_candidatos (importacion_id);
             """)
 
-        # Confirmar toda la transacción de migración (Fase 1, 2A y 2A.2)
+        # ==================================================================
+        # PASO 7 (FASE 2A.3): Persistencia y reapertura de importaciones RAT
+        # Columnas opcionales — idempotentes — no destructivas
+        # Permiten restaurar previsualización, mapeo y metadatos sin archivo
+        # ==================================================================
+        c.execute("""
+            ALTER TABLE importaciones_documentales
+            ADD COLUMN IF NOT EXISTS tabla_origen VARCHAR(255);
+        """)
+        c.execute("""
+            ALTER TABLE importaciones_documentales
+            ADD COLUMN IF NOT EXISTS encabezados_json JSONB;
+        """)
+        c.execute("""
+            ALTER TABLE importaciones_documentales
+            ADD COLUMN IF NOT EXISTS datos_extraidos_json JSONB;
+        """)
+        c.execute("""
+            ALTER TABLE importaciones_documentales
+            ADD COLUMN IF NOT EXISTS mapeo_columnas_json JSONB;
+        """)
+        c.execute("""
+            ALTER TABLE importaciones_documentales
+            ADD COLUMN IF NOT EXISTS total_filas_origen INTEGER DEFAULT 0;
+        """)
+        c.execute("""
+            ALTER TABLE importaciones_documentales
+            ADD COLUMN IF NOT EXISTS total_filas_utiles INTEGER DEFAULT 0;
+        """)
+
+        # Confirmar toda la transacción de migración (Fase 1, 2A, 2A.2 y 2A.3)
         conn.commit()
 
     except RuntimeError as exc:

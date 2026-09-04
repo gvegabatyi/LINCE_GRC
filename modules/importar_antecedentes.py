@@ -35,6 +35,10 @@ from db.repositories.importaciones import (
     actualizar_estado_importacion,
     actualizar_contadores_importacion,
     candidato_duplicado_en_importacion,
+    # Fase 2A.3 — Persistencia y reapertura
+    guardar_importacion_completa,
+    get_importacion_por_id,
+    get_importaciones_reabribles_df,
 )
 from services.deduplicacion_service import (
     calcular_hash_sha256,
@@ -110,21 +114,254 @@ def render() -> None:
 # ==============================================================================
 
 def _tab_nueva_importacion() -> None:
-    # ── PASO 1: Contexto ──────────────────────────────────────────────────────
-    st.subheader("Paso 1 — Seleccionar contexto")
+    # ── VALIDACIÓN Y SINCRONIZACIÓN DE EMPRESA ────────────────────────────────
     df_emp = get_empresas_df()
     if df_emp.empty:
-        st.warning("No hay empresas registradas. Regístrelas primero en 📁 Empresas.")
+        st.warning("⚠️ No hay empresas registradas. Regístrelas primero en el módulo 🏢 Empresas.")
         return
 
-    col1, col2 = st.columns(2)
-    with col1:
-        opciones_emp = {r["nombre"]: r["id"] for _, r in df_emp.iterrows()}
-        empresa_nombre = st.selectbox("Empresa *", list(opciones_emp.keys()), key="imp_empresa")
-        empresa_id = opciones_emp[empresa_nombre]
+    opciones_emp = {r["nombre"]: int(r["id"]) for _, r in df_emp.iterrows()}
+    nombres_emp = list(opciones_emp.keys())
+    ids_emp = list(opciones_emp.values())
 
-    with col2:
-        df_eval = get_evaluaciones_df(empresa_id=empresa_id)
+    # Inicializar con la empresa global activa si existe
+    empresa_activa_global = st.session_state.get("empresa_activa_id")
+    idx_default = 0
+    if empresa_activa_global and int(empresa_activa_global) in ids_emp:
+        idx_default = ids_emp.index(int(empresa_activa_global))
+
+    # Mantener el selector visible para compatibilidad
+    col_emp1, col_emp2 = st.columns([2, 2])
+    with col_emp1:
+        empresa_nombre_sel = st.selectbox(
+            "Empresa *",
+            nombres_emp,
+            index=idx_default,
+            key="imp_empresa",
+            help="Seleccione la empresa para la cual se importarán los antecedentes.",
+        )
+        empresa_id_seleccionada = int(opciones_emp[empresa_nombre_sel])
+
+    # Sincronización explícita con st.session_state["empresa_activa_id"]
+    necesita_rerun = False
+    if st.session_state.get("empresa_activa_id") != empresa_id_seleccionada:
+        st.session_state["empresa_activa_id"] = empresa_id_seleccionada
+        necesita_rerun = True
+
+    # Limpiar de manera segura el estado temporal si la empresa cambió
+    empresa_activa_anterior = st.session_state.get("_imp_empresa_activa_anterior")
+    if empresa_activa_anterior is not None and empresa_activa_anterior != empresa_id_seleccionada:
+        for clave in (
+            "importacion_reabierta_id", "_imp_reabierta_encabezados",
+            "_imp_reabierta_filas", "_imp_reabierta_mapeo",
+            "_imp_reabierta_tabla", "_imp_reabierta_tipo",
+            "_imp_reabierta_hash", "_imp_reabierta_nombre",
+            "_imp_reabierta_tamano", "_imp_reabierta_total_origen",
+            "_imp_reabierta_total_utiles",
+        ):
+            st.session_state.pop(clave, None)
+
+    st.session_state["_imp_empresa_activa_anterior"] = empresa_id_seleccionada
+
+    if necesita_rerun:
+        st.rerun()
+
+    # Variable única de contexto garantizada para todo el módulo
+    empresa_contexto_id = st.session_state.get("empresa_activa_id") or empresa_id_seleccionada
+    empresa_contexto_id = int(empresa_contexto_id)
+    empresa_nombre = empresa_nombre_sel
+    empresa_id = empresa_contexto_id
+
+    # ── BLOQUE COMPACTO: IMPORTACIONES GUARDADAS DE LA EMPRESA ACTIVA ─────────
+    st.markdown(f"##### Importaciones guardadas de la empresa activa ({empresa_nombre})")
+    df_reabribles = get_importaciones_reabribles_df(empresa_contexto_id)
+
+    if df_reabribles.empty:
+        st.caption(f"No hay importaciones guardadas aún para **{empresa_nombre}**.")
+    else:
+        opciones_reabrir = {}
+        for _, r in df_reabribles.iterrows():
+            fecha_str = str(r.get("created_at", ""))[:10]
+            etiq = (
+                f"#{r['id']} — {r['nombre_archivo']} "
+                f"({r.get('tipo_archivo','').upper()}) | "
+                f"{r.get('total_filas_origen', 0)} filas | "
+                f"{r.get('estado', '')} | {fecha_str}"
+            )
+            opciones_reabrir[etiq] = int(r["id"])
+
+        col_sel, col_btn = st.columns([4, 1])
+        with col_sel:
+            imp_reabrir_label = st.selectbox(
+                "Seleccionar importación guardada",
+                list(opciones_reabrir.keys()),
+                key="imp_reabrir_sel",
+                label_visibility="collapsed",
+            )
+        with col_btn:
+            if st.button("📂 Abrir", key="btn_abrir_importacion", use_container_width=True):
+                imp_id_seleccionado = opciones_reabrir[imp_reabrir_label]
+                datos_imp = get_importacion_por_id(imp_id_seleccionado, empresa_contexto_id)
+                if datos_imp is None:
+                    st.error(
+                        "⛔ No se pudo abrir esa importación. "
+                        "Verifique que pertenezca a la empresa seleccionada."
+                    )
+                else:
+                    st.session_state["importacion_reabierta_id"] = datos_imp["id"]
+                    st.session_state["_imp_reabierta_encabezados"] = datos_imp["encabezados"]
+                    st.session_state["_imp_reabierta_filas"] = datos_imp["filas_datos"]
+                    st.session_state["_imp_reabierta_mapeo"] = datos_imp["mapeo_columnas"]
+                    st.session_state["_imp_reabierta_tabla"] = datos_imp["tabla_origen"]
+                    st.session_state["_imp_reabierta_tipo"] = datos_imp["tipo_archivo"]
+                    st.session_state["_imp_reabierta_hash"] = datos_imp["hash_sha256"]
+                    st.session_state["_imp_reabierta_nombre"] = datos_imp["nombre_archivo"]
+                    st.session_state["_imp_reabierta_tamano"] = datos_imp["tamano_bytes"]
+                    st.session_state["_imp_reabierta_total_origen"] = datos_imp.get("total_filas_origen", len(datos_imp["filas_datos"]))
+                    st.session_state["_imp_reabierta_total_utiles"] = datos_imp.get("total_filas_utiles", len(datos_imp["filas_datos"]))
+                    st.rerun()
+
+    st.markdown("---")
+
+    # ── PRESENTAR IMPORTACIÓN REABIERTA (sin pedir archivo) ───────────────────
+    imp_reabierta_id = st.session_state.get("importacion_reabierta_id")
+    if imp_reabierta_id is not None:
+        # Verificar que la importación reabierta corresponda a empresa_contexto_id
+        datos_verif = get_importacion_por_id(int(imp_reabierta_id), empresa_contexto_id)
+        if datos_verif is None:
+            for clave in (
+                "importacion_reabierta_id", "_imp_reabierta_encabezados",
+                "_imp_reabierta_filas", "_imp_reabierta_mapeo",
+                "_imp_reabierta_tabla", "_imp_reabierta_tipo",
+                "_imp_reabierta_hash", "_imp_reabierta_nombre",
+                "_imp_reabierta_tamano", "_imp_reabierta_total_origen",
+                "_imp_reabierta_total_utiles",
+            ):
+                st.session_state.pop(clave, None)
+            imp_reabierta_id = None
+    if imp_reabierta_id is not None:
+        enc_rr = st.session_state.get("_imp_reabierta_encabezados", [])
+        filas_rr = st.session_state.get("_imp_reabierta_filas", [])
+        mapeo_rr_raw = st.session_state.get("_imp_reabierta_mapeo", {})
+        tabla_rr = st.session_state.get("_imp_reabierta_tabla", "")
+        tipo_rr = st.session_state.get("_imp_reabierta_tipo", "")
+        nombre_rr = st.session_state.get("_imp_reabierta_nombre", "")
+        tamano_rr = st.session_state.get("_imp_reabierta_tamano", 0)
+        total_origen_rr = st.session_state.get("_imp_reabierta_total_origen", len(filas_rr))
+        total_utiles_rr = st.session_state.get("_imp_reabierta_total_utiles", len(filas_rr))
+
+        st.success(
+            f"✅ **Importación #{imp_reabierta_id} reabierta** — "
+            f"`{nombre_rr}` ({tipo_rr.upper()}) | "
+            f"{len(filas_rr)} filas | Origen: {tabla_rr or '—'}"
+        )
+
+        if enc_rr and filas_rr:
+            st.markdown("**Previsualización restaurada:**")
+            if total_origen_rr > 200:
+                st.warning(
+                    f"Previsualización restaurada: se muestran las primeras 200 filas de {total_origen_rr}. "
+                    "Para volver a procesar todas las filas del archivo, cargue nuevamente el documento original."
+                )
+            else:
+                st.caption(f"Mostrando las {len(filas_rr)} filas guardadas. Scroll vertical y horizontal disponible.")
+
+            df_rr = pd.DataFrame(filas_rr, columns=enc_rr if (enc_rr and len(enc_rr) == len(filas_rr[0])) else None)
+            st.dataframe(df_rr, use_container_width=True, height=350, hide_index=False)
+
+        if enc_rr:
+            st.markdown("**Mapeo restaurado (selectores):**")
+            hash_rr = st.session_state.get("_imp_reabierta_hash", "reabierta")
+            opciones_rat = ["(No mapear)"] + CAMPOS_RAT_CLAVES
+
+            def _formatear_opcion_rat(k: str) -> str:
+                if k == "(No mapear)":
+                    return "(No mapear)"
+                return f"{k} — {CAMPOS_RAT_ETIQUETAS.get(k, k)}"
+
+            def _on_cambio_col_rr(i: int) -> None:
+                st.session_state["columna_mapeo_activa"] = i
+
+            mapeo_restaurado = {}
+            cols_rr = st.columns(min(len(enc_rr), 3))
+            for idx_rr, enc_val in enumerate(enc_rr):
+                enc_limpio_rr = str(enc_val).strip() if enc_val and str(enc_val).strip() else "Sin encabezado"
+                valor_guardado = mapeo_rr_raw.get(str(idx_rr), "(No mapear)")
+
+                # Normalización segura de etiquetas decoradas antiguas al identificador canónico
+                if valor_guardado and " — " in str(valor_guardado):
+                    clave_normalizada = str(valor_guardado).split(" — ")[0].strip()
+                else:
+                    clave_normalizada = str(valor_guardado).strip() if valor_guardado else "(No mapear)"
+
+                idx_opcion_rr = (
+                    opciones_rat.index(clave_normalizada)
+                    if clave_normalizada in opciones_rat
+                    else 0
+                )
+                col_rr = cols_rr[idx_rr % len(cols_rr)]
+                sel_rr = col_rr.selectbox(
+                    f"Col. {idx_rr} — {enc_limpio_rr}",
+                    opciones_rat,
+                    index=idx_opcion_rr,
+                    format_func=_formatear_opcion_rat,
+                    key=f"mapeo_rr_{hash_rr}_{idx_rr}",
+                    on_change=_on_cambio_col_rr,
+                    args=(idx_rr,),
+                )
+                mapeo_restaurado[idx_rr] = None if sel_rr == "(No mapear)" else sel_rr
+
+            _render_referencia_activa(enc_rr, filas_rr, f"rr_{hash_rr}")
+
+        col_btn_save_rr, col_btn_close_rr = st.columns([2, 1])
+        with col_btn_save_rr:
+            if st.button("💾 Guardar importación RAT", key=f"btn_guardar_rr_{imp_reabierta_id}"):
+                mapeo_guardar = {
+                    str(i): (mapeo_restaurado.get(i) or "(No mapear)")
+                    for i in range(len(enc_rr))
+                }
+                imp_id_act, msg_act = guardar_importacion_completa(
+                    empresa_id=empresa_contexto_id,
+                    nombre_archivo=nombre_rr,
+                    tipo_archivo=tipo_rr,
+                    hash_sha256=hash_rr,
+                    tamano_bytes=tamano_rr,
+                    tabla_origen=tabla_rr,
+                    encabezados=enc_rr,
+                    filas_datos=filas_rr,
+                    mapeo_columnas=mapeo_guardar,
+                    total_filas_origen=total_origen_rr,
+                    total_filas_utiles=total_utiles_rr,
+                    importacion_id_existente=imp_reabierta_id,
+                )
+                if imp_id_act:
+                    st.session_state["_imp_reabierta_mapeo"] = mapeo_guardar
+                    st.success(f"✅ Mapeo y configuración de la Importación #{imp_id_act} guardados en Neon.")
+                else:
+                    st.error(f"⛔ Error al actualizar importación: {msg_act}")
+
+        with col_btn_close_rr:
+            if st.button("✖ Cerrar importación reabierta", key="btn_cerrar_reabierta", use_container_width=True):
+                for clave in (
+                    "importacion_reabierta_id", "_imp_reabierta_encabezados",
+                    "_imp_reabierta_filas", "_imp_reabierta_mapeo",
+                    "_imp_reabierta_tabla", "_imp_reabierta_tipo",
+                    "_imp_reabierta_hash", "_imp_reabierta_nombre",
+                    "_imp_reabierta_tamano", "_imp_reabierta_total_origen",
+                    "_imp_reabierta_total_utiles",
+                ):
+                    st.session_state.pop(clave, None)
+                st.rerun()
+
+        st.markdown("---")
+
+    # ── PASO 1: Contexto de la importación ────────────────────────────────────
+    st.subheader("Paso 1 — Contexto de la importación")
+    col_ctx1, col_ctx2 = st.columns(2)
+    with col_ctx1:
+        st.text_input("Empresa *", value=empresa_nombre, disabled=True)
+    with col_ctx2:
+        df_eval = get_evaluaciones_df(empresa_id=empresa_contexto_id)
         opciones_eval = {"(Sin evaluación asociada)": None}
         if not df_eval.empty:
             for _, r in df_eval.iterrows():
@@ -207,7 +444,7 @@ def _tab_nueva_importacion() -> None:
     col_r2.metric("Tamaño", f"{tamano_kb:.1f} KB")
     col_r3.metric("Hash SHA-256 (abreviado)", hash_archivo[:12] + "…")
 
-    dup = detectar_duplicado_empresa(empresa_id, hash_archivo)
+    dup = detectar_duplicado_empresa(empresa_contexto_id, hash_archivo)
     advertencias_list = list(advertencias_formato)
     if dup:
         msg_dup = (
@@ -244,21 +481,33 @@ def _tab_nueva_importacion() -> None:
     truncados_contador = st.session_state.get(f"imp_truncados_{hash_archivo}", 0)
     filas_utiles_totales = st.session_state.get(f"imp_filas_utiles_{hash_archivo}", len(candidatos_generados))
 
+    meta_importacion = {
+        "empresa_id": empresa_contexto_id,
+        "nombre_archivo": archivo.name,
+        "tipo_archivo": tipo_detectado,
+        "hash_sha256": hash_archivo,
+        "tamano_bytes": len(contenido),
+        "evaluacion_id": evaluacion_id,
+        "descripcion_origen": descripcion_origen,
+        "advertencias": "; ".join(advertencias_list) if advertencias_list else "",
+        "id_importacion_existente": dup["id"] if dup else None,
+    }
+
     if tipo_detectado == "xlsx":
         candidatos_generados, columnas_detectadas_archivo, campos_rat_mapeados, truncados_contador, filas_utiles_totales = _flujo_xlsx(
-            contenido, hash_archivo, candidatos_generados, conservar_adicionales
+            contenido, hash_archivo, candidatos_generados, conservar_adicionales, meta_importacion=meta_importacion
         )
     elif tipo_detectado == "csv":
         candidatos_generados, columnas_detectadas_archivo, campos_rat_mapeados, truncados_contador, filas_utiles_totales = _flujo_csv(
-            contenido, hash_archivo, candidatos_generados, conservar_adicionales
+            contenido, hash_archivo, candidatos_generados, conservar_adicionales, meta_importacion=meta_importacion
         )
     elif tipo_detectado == "docx":
         candidatos_generados, columnas_detectadas_archivo, campos_rat_mapeados, truncados_contador, filas_utiles_totales = _flujo_docx(
-            contenido, hash_archivo, candidatos_generados, conservar_adicionales
+            contenido, hash_archivo, candidatos_generados, conservar_adicionales, meta_importacion=meta_importacion
         )
     elif tipo_detectado == "pdf":
         candidatos_generados, columnas_detectadas_archivo, campos_rat_mapeados, truncados_contador, filas_utiles_totales = _flujo_pdf(
-            contenido, hash_archivo, candidatos_generados, empresa_id
+            contenido, hash_archivo, candidatos_generados, empresa_contexto_id
         )
     elif tipo_detectado in ("md", "txt"):
         candidatos_generados, columnas_detectadas_archivo, campos_rat_mapeados, truncados_contador, filas_utiles_totales = _flujo_texto(
@@ -306,7 +555,7 @@ def _tab_nueva_importacion() -> None:
 
     # ── PASO 7: Evidencia URL ──────────────────────────────────────────────────
     st.subheader("Paso 7 — Vincular evidencia documental de origen (opcional)")
-    df_ev_emp = get_evidencias_df(empresa_id=empresa_id)
+    df_ev_emp = get_evidencias_df(empresa_id=empresa_contexto_id)
     opciones_ev = {"(Sin evidencia permanente vinculada)": None}
     if not df_ev_emp.empty:
         for _, r in df_ev_emp.iterrows():
@@ -363,7 +612,7 @@ def _tab_nueva_importacion() -> None:
                 imp_id = id_importacion_existente
             else:
                 imp_id, msg_imp = crear_importacion(
-                    empresa_id=empresa_id,
+                    empresa_id=empresa_contexto_id,
                     nombre_archivo=archivo.name,
                     tipo_archivo=tipo_detectado,
                     mime_detectado=tipo_detectado,
@@ -393,7 +642,7 @@ def _tab_nueva_importacion() -> None:
 
                 cid, _ = crear_candidato(
                     importacion_id=imp_id,
-                    empresa_id=empresa_id,
+                    empresa_id=empresa_contexto_id,
                     datos_extraidos_json=cand["datos_extraidos_json"],
                     nro_hoja=hoja,
                     nro_fila=fila,
@@ -430,7 +679,13 @@ def _tab_nueva_importacion() -> None:
 # FLUJOS DE EXTRACCIÓN POR FORMATO
 # ==============================================================================
 
-def _flujo_xlsx(contenido: bytes, hash_archivo: str, candidatos_previos: list, conservar_adicionales: bool) -> tuple[list, list, list, int, int]:
+def _flujo_xlsx(
+    contenido: bytes,
+    hash_archivo: str,
+    candidatos_previos: list,
+    conservar_adicionales: bool,
+    meta_importacion: dict | None = None,
+) -> tuple[list, list, list, int, int]:
     """Flujo interactivo de extracción para XLSX con previsualización completa."""
     try:
         hojas = extraer_xlsx_hojas(contenido)
@@ -473,6 +728,17 @@ def _flujo_xlsx(contenido: bytes, hash_archivo: str, candidatos_previos: list, c
     # Referencia activa en archivo importado (aparece al modificar un selector)
     _render_referencia_activa(encabezados, datos, hash_archivo)
 
+    # ── FASE 2A.3: Botón de persistencia explícita inmediatamente tras mapeo y referencia activa ──
+    _render_boton_guardar_importacion_rat(
+        hash_archivo=hash_archivo,
+        tabla_origen=f"Hoja: {hoja_sel}",
+        encabezados=encabezados,
+        filas_datos=datos,
+        mapeo=mapeo,
+        total_filas=total_datos,
+        meta_importacion=meta_importacion,
+    )
+
     if not campos_mapeados:
         st.info("Mapee al menos una columna a un campo RAT para generar candidatos.")
         return [], encabezados, [], 0, total_datos
@@ -493,13 +759,25 @@ def _flujo_xlsx(contenido: bytes, hash_archivo: str, candidatos_previos: list, c
             st.success(f"✅ Candidatos generados: {len(candidatos)} de {total_utiles} filas útiles detectadas.")
         except Exception as exc:
             st.error(f"Error al generar candidatos: {exc}")
-
     cands = st.session_state.get(f"imp_candidatos_{hash_archivo}", candidatos_previos)
     tot = st.session_state.get(f"imp_filas_utiles_{hash_archivo}", total_utiles)
+    # Fase 2A.3: persistir matriz, tabla origen y mapeo para '💾 Guardar importación RAT'
+    st.session_state[f"_imp_filas_raw_{hash_archivo}"] = datos[:200] if len(datos) > 200 else datos
+    st.session_state[f"imp_tabla_origen_{hash_archivo}"] = f"Hoja: {hoja_sel}"
+    st.session_state[f"imp_mapeo_actual_{hash_archivo}"] = {
+        str(i): (mapeo.get(i) or "(No mapear)")
+        for i in range(len(encabezados))
+    }
     return cands, encabezados, campos_mapeados, truncados, tot
 
 
-def _flujo_csv(contenido: bytes, hash_archivo: str, candidatos_previos: list, conservar_adicionales: bool) -> tuple[list, list, list, int, int]:
+def _flujo_csv(
+    contenido: bytes,
+    hash_archivo: str,
+    candidatos_previos: list,
+    conservar_adicionales: bool,
+    meta_importacion: dict | None = None,
+) -> tuple[list, list, list, int, int]:
     """Flujo interactivo de extracción para CSV con previsualización completa."""
     try:
         encabezados, datos, delimitador, total_datos = extraer_csv_encabezados_preview(contenido)
@@ -530,6 +808,17 @@ def _flujo_csv(contenido: bytes, hash_archivo: str, candidatos_previos: list, co
     # Referencia activa en archivo importado (aparece al modificar un selector)
     _render_referencia_activa(encabezados, datos, hash_archivo)
 
+    # ── FASE 2A.3: Botón de persistencia explícita inmediatamente tras mapeo y referencia activa ──
+    _render_boton_guardar_importacion_rat(
+        hash_archivo=hash_archivo,
+        tabla_origen="Archivo CSV",
+        encabezados=encabezados,
+        filas_datos=datos,
+        mapeo=mapeo,
+        total_filas=total_datos,
+        meta_importacion=meta_importacion,
+    )
+
     if not campos_mapeados:
         st.info("Mapee al menos una columna a un campo RAT para generar candidatos.")
         return [], encabezados, [], 0, total_datos
@@ -553,10 +842,23 @@ def _flujo_csv(contenido: bytes, hash_archivo: str, candidatos_previos: list, co
 
     cands = st.session_state.get(f"imp_candidatos_{hash_archivo}", candidatos_previos)
     tot = st.session_state.get(f"imp_filas_utiles_{hash_archivo}", total_utiles)
+    # Fase 2A.3: persistir matriz, tabla origen y mapeo para '💾 Guardar importación RAT'
+    st.session_state[f"_imp_filas_raw_{hash_archivo}"] = datos[:200] if len(datos) > 200 else datos
+    st.session_state[f"imp_tabla_origen_{hash_archivo}"] = "Archivo CSV"
+    st.session_state[f"imp_mapeo_actual_{hash_archivo}"] = {
+        str(i): (mapeo.get(i) or "(No mapear)")
+        for i in range(len(encabezados))
+    }
     return cands, encabezados, campos_mapeados, truncados, tot
 
 
-def _flujo_docx(contenido: bytes, hash_archivo: str, candidatos_previos: list, conservar_adicionales: bool) -> tuple[list, list, list, int, int]:
+def _flujo_docx(
+    contenido: bytes,
+    hash_archivo: str,
+    candidatos_previos: list,
+    conservar_adicionales: bool,
+    meta_importacion: dict | None = None,
+) -> tuple[list, list, list, int, int]:
     """Flujo interactivo de extracción para DOCX con previsualización completa de todas las filas."""
     try:
         estructura = extraer_docx_estructura(contenido)
@@ -621,8 +923,27 @@ def _flujo_docx(contenido: bytes, hash_archivo: str, candidatos_previos: list, c
         mapeo = _selector_mapeo_columnas(encabezados, hash_archivo)
         campos_mapeados = [v for v in mapeo.values() if v]
 
+        # Fase 2A.3: persistir matriz, tabla origen y mapeo para '💾 Guardar importación RAT'
+        st.session_state[f"_imp_filas_raw_{hash_archivo}"] = filas_datos[:200] if len(filas_datos) > 200 else filas_datos
+        st.session_state[f"imp_tabla_origen_{hash_archivo}"] = f"Tabla {idx_tabla + 1}"
+        st.session_state[f"imp_mapeo_actual_{hash_archivo}"] = {
+            str(i): (mapeo.get(i) or "(No mapear)")
+            for i in range(len(encabezados))
+        }
+
         # Referencia activa en archivo importado (aparece al modificar un selector)
         _render_referencia_activa(encabezados, filas_datos, hash_archivo)
+
+        # ── FASE 2A.3: Botón de persistencia explícita inmediatamente tras mapeo y referencia activa ──
+        _render_boton_guardar_importacion_rat(
+            hash_archivo=hash_archivo,
+            tabla_origen=f"Tabla {idx_tabla + 1}",
+            encabezados=encabezados,
+            filas_datos=filas_datos,
+            mapeo=mapeo,
+            total_filas=total_datos,
+            meta_importacion=meta_importacion,
+        )
 
         if not campos_mapeados:
             st.info("Mapee al menos una columna.")
@@ -793,7 +1114,9 @@ def _render_referencia_activa(
 
     destino_valor_widget = st.session_state.get(f"mapeo_{key_base}_{col_activa_idx}")
     if destino_valor_widget and destino_valor_widget != "(No mapear)":
-        destino_label = destino_valor_widget
+        clave_limpia = str(destino_valor_widget).split(" — ")[0].strip()
+        desc = CAMPOS_RAT_ETIQUETAS.get(clave_limpia)
+        destino_label = f"{clave_limpia} — {desc}" if desc else clave_limpia
     else:
         destino_label = "(No mapear)"
 
@@ -831,11 +1154,94 @@ def _render_referencia_activa(
     )
 
 
+def _render_boton_guardar_importacion_rat(
+    hash_archivo: str,
+    tabla_origen: str,
+    encabezados: list[str],
+    filas_datos: list[list],
+    mapeo: dict,
+    total_filas: int,
+    meta_importacion: dict | None = None,
+) -> None:
+    """
+    Renderiza el botón '💾 Guardar importación RAT' inmediatamente después del mapeo y referencia activa.
+    Persiste metadatos, matriz extraída y mapeo en Neon sin requerir generar candidatos previamente.
+    """
+    empresa_contexto_id = (
+        (meta_importacion.get("empresa_id") if meta_importacion else None)
+        or st.session_state.get("empresa_activa_id")
+        or st.session_state.get("_imp_empresa_activa_anterior")
+    )
+
+    # Condición mínima permitida para renderizar el botón
+    if not empresa_contexto_id or not hash_archivo or not encabezados or not filas_datos or mapeo is None:
+        return
+
+    guardar_importacion_click = st.button(
+        "💾 Guardar importación RAT",
+        key=f"guardar_importacion_rat_{hash_archivo}",
+        type="primary",
+        help="Guarda metadatos, previsualización y mapeo en Neon para poder reabrirlos sin subir el archivo nuevamente.",
+    )
+
+    if guardar_importacion_click:
+        empresa_id_int = int(empresa_contexto_id)
+        nombre_archivo = (meta_importacion.get("nombre_archivo") if meta_importacion else None) or f"archivo_{hash_archivo[:8]}"
+        tipo_archivo = (meta_importacion.get("tipo_archivo") if meta_importacion else None) or "documento"
+        tamano_bytes = (meta_importacion.get("tamano_bytes") if meta_importacion else 0) or 0
+        evaluacion_id = meta_importacion.get("evaluacion_id") if meta_importacion else None
+        descripcion_origen = meta_importacion.get("descripcion_origen", "") if meta_importacion else ""
+        advertencias = meta_importacion.get("advertencias", "") if meta_importacion else ""
+        id_existente = meta_importacion.get("id_importacion_existente") if meta_importacion else None
+        if not id_existente:
+            id_existente = st.session_state.get("importacion_reabierta_id")
+
+        mapeo_canonico = {
+            str(i): (mapeo.get(i) or "(No mapear)")
+            for i in range(len(encabezados))
+        }
+        filas_a_guardar = filas_datos[:200] if len(filas_datos) > 200 else filas_datos
+        total_utiles = total_filas
+
+        with st.spinner("Guardando importación RAT en la bandeja persistente…"):
+            imp_id, msg = guardar_importacion_completa(
+                empresa_id=empresa_id_int,
+                nombre_archivo=nombre_archivo,
+                tipo_archivo=tipo_archivo,
+                hash_sha256=hash_archivo,
+                tamano_bytes=tamano_bytes,
+                tabla_origen=tabla_origen,
+                encabezados=encabezados,
+                filas_datos=filas_a_guardar,
+                mapeo_columnas=mapeo_canonico,
+                total_filas_origen=total_filas,
+                total_filas_utiles=total_utiles,
+                evaluacion_id=evaluacion_id,
+                descripcion_origen=descripcion_origen,
+                advertencias=advertencias,
+                importacion_id_existente=id_existente,
+            )
+
+        if imp_id:
+            fue_actualizada = bool(id_existente and int(id_existente) == imp_id)
+            verbo = "actualizada" if fue_actualizada else "guardada"
+            st.success(
+                f"✅ Importación RAT {verbo}. ID: #{imp_id}. Archivo: {nombre_archivo}. "
+                f"Filas de origen: {total_filas}. Filas útiles: {total_utiles}. Mapeo guardado."
+            )
+        else:
+            st.error(f"⛔ Error al guardar importación: {msg}")
+
+
 def _selector_mapeo_columnas(encabezados: list[str], key_base: str) -> dict:
     """Muestra un selector para mapear cada columna del archivo a un campo RAT."""
     st.markdown("**Mapeo de columnas → campos RAT** *(Decreto N° 662, Art. 3 d)*:")
-    opciones_rat = ["(No mapear)"] + [f"{k} — {v}" for k, v in CAMPOS_RAT_ETIQUETAS.items()]
-    claves_rat = [None] + CAMPOS_RAT_CLAVES
+    opciones_rat = ["(No mapear)"] + CAMPOS_RAT_CLAVES
+
+    def _formatear_opcion_rat(k: str) -> str:
+        if k == "(No mapear)":
+            return "(No mapear)"
+        return f"{k} — {CAMPOS_RAT_ETIQUETAS.get(k, k)}"
 
     def _on_cambio_columna(i: int):
         st.session_state["columna_mapeo_activa"] = i
@@ -850,11 +1256,12 @@ def _selector_mapeo_columnas(encabezados: list[str], key_base: str) -> dict:
         sel = col.selectbox(
             label_selector,
             opciones_rat,
+            format_func=_formatear_opcion_rat,
             key=f"mapeo_{key_base}_{idx}",
             on_change=_on_cambio_columna,
             args=(idx,),
         )
-        mapeo[idx] = claves_rat[opciones_rat.index(sel)]
+        mapeo[idx] = None if sel == "(No mapear)" else sel
     return mapeo
 
 
@@ -897,11 +1304,18 @@ def _tab_revisar_candidatos() -> None:
         return
 
     opciones_emp = {r["nombre"]: r["id"] for _, r in df_emp.iterrows()}
-    empresa_sel = st.selectbox("Empresa", list(opciones_emp.keys()), key="rev_empresa")
-    empresa_id = opciones_emp[empresa_sel]
+    empresa_activa_id = st.session_state.get("empresa_activa_id")
+    idx_default = 0
+    if empresa_activa_id and empresa_activa_id in opciones_emp.values():
+        idx_default = list(opciones_emp.values()).index(empresa_activa_id)
+    empresa_sel = st.selectbox("Empresa", list(opciones_emp.keys()), index=idx_default, key="rev_empresa")
+    empresa_contexto_id = int(opciones_emp[empresa_sel])
+    if st.session_state.get("empresa_activa_id") != empresa_contexto_id:
+        st.session_state["empresa_activa_id"] = empresa_contexto_id
+    empresa_id = empresa_contexto_id
 
     # Contadores por estado de la empresa
-    df_todos = get_candidatos_df(empresa_id=empresa_id)
+    df_todos = get_candidatos_df(empresa_id=empresa_contexto_id)
     if not df_todos.empty:
         c_pend = len(df_todos[df_todos["estado_revision"] == "pendiente"])
         c_aprob = len(df_todos[df_todos["estado_revision"] == "aprobado_borrador"])
@@ -1250,8 +1664,18 @@ def _tab_historial() -> None:
     if not df_emp.empty:
         opciones_emp.update({r["nombre"]: r["id"] for _, r in df_emp.iterrows()})
 
-    empresa_sel = st.selectbox("Filtrar por empresa", list(opciones_emp.keys()), key="hist_empresa")
+    empresa_activa_id = st.session_state.get("empresa_activa_id")
+    idx_default_hist = 0
+    if empresa_activa_id:
+        nombres_keys = list(opciones_emp.keys())
+        for i_k, k in enumerate(nombres_keys):
+            if opciones_emp[k] == empresa_activa_id:
+                idx_default_hist = i_k
+                break
+    empresa_sel = st.selectbox("Filtrar por empresa", list(opciones_emp.keys()), index=idx_default_hist, key="hist_empresa")
     empresa_id_hist = opciones_emp[empresa_sel]
+    if empresa_id_hist and st.session_state.get("empresa_activa_id") != empresa_id_hist:
+        st.session_state["empresa_activa_id"] = empresa_id_hist
 
     df_imp = get_importaciones_df(empresa_id=empresa_id_hist)
 
