@@ -78,6 +78,7 @@ def add_tratamiento(
                 ),
             )
         conn.commit()
+        get_tratamientos_df.clear()
         return True, "Tratamiento (RAT) registrado exitosamente."
     except Exception as exc:
         if conn:
@@ -156,6 +157,7 @@ def update_tratamiento(
                 ),
             )
         conn.commit()
+        get_tratamientos_df.clear()
         return True, "Tratamiento actualizado exitosamente."
     except Exception as exc:
         if conn:
@@ -173,6 +175,7 @@ def delete_tratamiento(tratamiento_id: int) -> tuple[bool, str]:
         with conn.cursor() as c:
             c.execute("DELETE FROM tratamientos WHERE id=%s", (tratamiento_id,))
         conn.commit()
+        get_tratamientos_df.clear()
         return True, "Tratamiento eliminado exitosamente."
     except Exception as exc:
         if conn:
@@ -183,6 +186,7 @@ def delete_tratamiento(tratamiento_id: int) -> tuple[bool, str]:
             conn.close()
 
 
+@st.cache_data(ttl=30)
 def get_tratamientos_df(empresa_id: int = None, evaluacion_id: int = None) -> pd.DataFrame:
     conn = None
     try:
@@ -234,8 +238,12 @@ def get_tratamientos_df(empresa_id: int = None, evaluacion_id: int = None) -> pd
         query += " ORDER BY t.id DESC"
         df = pd.read_sql_query(query, conn, params=tuple(params) if params else None)
         return df
-    except Exception:
-        return pd.DataFrame()
+    except RuntimeError as exc:
+        st.error(f"⚠️ {exc}")
+        raise
+    except Exception as exc:
+        st.error(f"Error al consultar tratamientos ({type(exc).__name__}).")
+        raise
     finally:
         if conn:
             conn.close()

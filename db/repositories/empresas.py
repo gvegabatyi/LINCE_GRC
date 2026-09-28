@@ -36,6 +36,7 @@ def add_empresa(nombre: str, rut: str, direccion: str, contacto: str,
                 ),
             )
         conn.commit()
+        get_empresas_df.clear()
         return True, "Empresa registrada exitosamente."
     except psycopg2.IntegrityError:
         if conn:
@@ -73,6 +74,7 @@ def update_empresa(empresa_id: int, nombre: str, rut: str, direccion: str,
                 ),
             )
         conn.commit()
+        get_empresas_df.clear()
         return True, "Empresa actualizada exitosamente."
     except Exception as exc:
         if conn:
@@ -90,6 +92,7 @@ def delete_empresa(empresa_id: int) -> tuple[bool, str]:
         with conn.cursor() as c:
             c.execute("DELETE FROM empresas WHERE id=%s", (empresa_id,))
         conn.commit()
+        get_empresas_df.clear()
         return True, "Empresa y registros asociados eliminados."
     except Exception as exc:
         if conn:
@@ -104,6 +107,7 @@ def delete_empresa(empresa_id: int) -> tuple[bool, str]:
 # LECTURA (retornan pd.DataFrame — muestran st.error en caso de fallo)
 # ==============================================================================
 
+@st.cache_data(ttl=60)
 def get_empresas_df(search_term: str = "") -> pd.DataFrame:
     conn = None
     try:
@@ -130,10 +134,10 @@ def get_empresas_df(search_term: str = "") -> pd.DataFrame:
         return df
     except RuntimeError as exc:
         st.error(f"⚠️ {exc}")
-        return pd.DataFrame()
+        raise
     except Exception as exc:
         st.error(f"Error al listar empresas ({type(exc).__name__}).")
-        return pd.DataFrame()
+        raise
     finally:
         if conn:
             conn.close()

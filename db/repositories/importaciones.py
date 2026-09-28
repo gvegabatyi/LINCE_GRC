@@ -18,6 +18,7 @@ import pandas as pd
 from datetime import datetime, date
 
 from db.connection import get_connection
+from db.repositories.tratamientos import get_tratamientos_df
 
 
 # ==============================================================================
@@ -70,6 +71,8 @@ def crear_importacion(
             )
             new_id = c.fetchone()[0]
         conn.commit()
+        get_importaciones_df.clear()
+        get_importaciones_reabribles_df.clear()
         return new_id, "Importación registrada."
     except Exception as exc:
         if conn:
@@ -109,6 +112,9 @@ def actualizar_estado_importacion(
                 tuple(params),
             )
         conn.commit()
+        get_importaciones_df.clear()
+        get_importaciones_reabribles_df.clear()
+        get_importacion_por_id.clear()
         return True
     except Exception:
         if conn:
@@ -142,6 +148,9 @@ def actualizar_contadores_importacion(importacion_id: int) -> bool:
                 (importacion_id, importacion_id, importacion_id),
             )
         conn.commit()
+        get_importaciones_df.clear()
+        get_importaciones_reabribles_df.clear()
+        get_importacion_por_id.clear()
         return True
     except Exception:
         if conn:
@@ -152,6 +161,7 @@ def actualizar_contadores_importacion(importacion_id: int) -> bool:
             conn.close()
 
 
+@st.cache_data(ttl=30)
 def get_importaciones_df(empresa_id: int = None) -> pd.DataFrame:
     """Retorna el historial de importaciones, opcionalmente filtrado por empresa."""
     conn = None
@@ -185,8 +195,12 @@ def get_importaciones_df(empresa_id: int = None) -> pd.DataFrame:
             params.append(empresa_id)
         query += " ORDER BY imp.id DESC"
         return pd.read_sql_query(query, conn, params=tuple(params) if params else None)
-    except Exception:
-        return pd.DataFrame()
+    except RuntimeError as exc:
+        st.error(f"⚠️ {exc}")
+        raise
+    except Exception as exc:
+        st.error(f"Error al consultar importaciones ({type(exc).__name__}).")
+        raise
     finally:
         if conn:
             conn.close()
@@ -245,6 +259,9 @@ def crear_candidato(
             )
             new_id = c.fetchone()[0]
         conn.commit()
+        get_candidatos_df.clear()
+        get_importaciones_df.clear()
+        get_importaciones_reabribles_df.clear()
         return new_id, "Candidato registrado."
     except Exception as exc:
         if conn:
@@ -255,6 +272,7 @@ def crear_candidato(
             conn.close()
 
 
+@st.cache_data(ttl=15)
 def get_candidatos_df(
     empresa_id: int = None,
     importacion_id: int = None,
@@ -303,8 +321,12 @@ def get_candidatos_df(
             params.append(estado_revision)
         query += " ORDER BY c.id DESC"
         return pd.read_sql_query(query, conn, params=tuple(params) if params else None)
-    except Exception:
-        return pd.DataFrame()
+    except RuntimeError as exc:
+        st.error(f"⚠️ {exc}")
+        raise
+    except Exception as exc:
+        st.error(f"Error al consultar candidatos RAT ({type(exc).__name__}).")
+        raise
     finally:
         if conn:
             conn.close()
@@ -414,6 +436,11 @@ def aplicar_accion_candidato(
             )
 
         conn.commit()
+        get_candidatos_df.clear()
+        get_importaciones_df.clear()
+        get_importaciones_reabribles_df.clear()
+        if accion == "crear_borrador":
+            get_tratamientos_df.clear()
 
         if accion == "crear_borrador":
             return (
@@ -468,6 +495,10 @@ def registrar_actualizacion_candidato_confirmada(
                 (tratamiento_existente_id, obs_texto, candidato_id),
             )
         conn.commit()
+        get_candidatos_df.clear()
+        get_importaciones_df.clear()
+        get_importaciones_reabribles_df.clear()
+        get_tratamientos_df.clear()
         return True, "Trazabilidad de conciliación registrada en el candidato."
     except Exception as exc:
         if conn:
@@ -657,6 +688,9 @@ def guardar_importacion_completa(
                     ),
                 )
                 conn.commit()
+                get_importaciones_df.clear()
+                get_importaciones_reabribles_df.clear()
+                get_importacion_por_id.clear()
                 return imp_id, f"Importación #{imp_id} actualizada con previsualización y mapeo."
 
             else:
@@ -694,6 +728,9 @@ def guardar_importacion_completa(
                 )
                 new_id = c.fetchone()[0]
                 conn.commit()
+                get_importaciones_df.clear()
+                get_importaciones_reabribles_df.clear()
+                get_importacion_por_id.clear()
                 return new_id, f"Importación #{new_id} guardada con previsualización y mapeo."
 
     except Exception as exc:
@@ -705,6 +742,7 @@ def guardar_importacion_completa(
             conn.close()
 
 
+@st.cache_data(ttl=30)
 def get_importacion_por_id(importacion_id: int, empresa_id: int) -> dict | None:
     """
     Recupera una importación completa (incluyendo JSONB de Fase 2A.3) validando
@@ -791,13 +829,18 @@ def get_importacion_por_id(importacion_id: int, empresa_id: int) -> dict | None:
                 "created_at": r_created,
                 "updated_at": r_updated,
             }
-    except Exception:
-        return None
+    except RuntimeError as exc:
+        st.error(f"⚠️ {exc}")
+        raise
+    except Exception as exc:
+        st.error(f"Error al recuperar importación #{importacion_id} ({type(exc).__name__}).")
+        raise
     finally:
         if conn:
             conn.close()
 
 
+@st.cache_data(ttl=30)
 def get_importaciones_reabribles_df(empresa_id: int) -> pd.DataFrame:
     """
     Retorna las importaciones de la empresa que tienen datos de reapertura
@@ -826,8 +869,12 @@ def get_importaciones_reabribles_df(empresa_id: int) -> pd.DataFrame:
             ORDER BY id DESC
         """
         return pd.read_sql_query(query, conn, params=(empresa_id,))
-    except Exception:
-        return pd.DataFrame()
+    except RuntimeError as exc:
+        st.error(f"⚠️ {exc}")
+        raise
+    except Exception as exc:
+        st.error(f"Error al listar importaciones guardadas ({type(exc).__name__}).")
+        raise
     finally:
         if conn:
             conn.close()

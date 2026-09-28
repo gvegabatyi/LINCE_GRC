@@ -378,6 +378,7 @@ def save_delegado_dpd(
 # TRAZABILIDAD NORMATIVA (DECRETO N° 662)
 # ==============================================================================
 
+@st.cache_data(ttl=3600)
 def get_referencias_normativas_df() -> pd.DataFrame:
     """Retorna el catálogo de artículos y criterios del Decreto N° 662."""
     conn = None
@@ -397,8 +398,12 @@ def get_referencias_normativas_df() -> pd.DataFrame:
             ORDER BY r.id ASC
         """
         return pd.read_sql_query(query, conn)
-    except Exception:
-        return pd.DataFrame()
+    except RuntimeError as exc:
+        st.error(f"⚠️ {exc}")
+        raise
+    except Exception as exc:
+        st.error(f"Error al consultar referencias normativas ({type(exc).__name__}).")
+        raise
     finally:
         if conn:
             conn.close()
