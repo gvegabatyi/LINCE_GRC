@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lince-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: lince_grc
+    ports:
+      - "5432:5432"
+    volumes:
+      - lince_pgdata:/var/lib/postgresql/data
+
+volumes:
+  lince_pgdata:

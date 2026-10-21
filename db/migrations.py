@@ -61,15 +61,64 @@ def init_db() -> None:
         with conn.cursor() as c:
 
             # ==================================================================
-            # PASO 1: Validar que las tablas base existen
+            # PASO 1: Asegurar tablas base de Fase 1 (idempotente)
             # ==================================================================
-            tablas_requeridas = ["empresas", "tratamientos", "visitas", "evidencias"]
-            for tabla in tablas_requeridas:
-                if not _tabla_existe(c, tabla):
-                    raise RuntimeError(
-                        f"La tabla '{tabla}' no fue encontrada en la base de datos. "
-                        "Contacte al administrador del sistema."
-                    )
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS empresas (
+                    id          SERIAL PRIMARY KEY,
+                    nombre      VARCHAR(255) NOT NULL,
+                    rut         VARCHAR(50) UNIQUE NOT NULL,
+                    direccion   TEXT,
+                    contacto    VARCHAR(255),
+                    email       VARCHAR(255),
+                    telefono    VARCHAR(100),
+                    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS tratamientos (
+                    id                  SERIAL PRIMARY KEY,
+                    empresa_id          INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+                    evaluacion_id       INTEGER,
+                    nombre_tratamiento  VARCHAR(255) NOT NULL,
+                    descripcion         TEXT,
+                    base_legal          TEXT,
+                    datos_personales    TEXT,
+                    responsables        TEXT,
+                    encargados          TEXT,
+                    transferencias      TEXT,
+                    evidencia_id        INTEGER,
+                    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS visitas (
+                    id                  SERIAL PRIMARY KEY,
+                    empresa_id          INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+                    evaluacion_id       INTEGER,
+                    fecha_visita        DATE,
+                    tipo_visita         VARCHAR(100),
+                    auditor             VARCHAR(255),
+                    checklist_seguridad JSONB,
+                    puntaje             INTEGER,
+                    observaciones       TEXT,
+                    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS evidencias (
+                    id              SERIAL PRIMARY KEY,
+                    visita_id       INTEGER REFERENCES visitas(id) ON DELETE CASCADE,
+                    evaluacion_id   INTEGER,
+                    descripcion     TEXT,
+                    foto_url        TEXT,
+                    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
 
             # ==================================================================
             # PASO 2: Tabla evaluaciones (Fase 1)
