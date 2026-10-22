@@ -262,6 +262,7 @@ Todas las variables que lee el código:
 | Variable | Leída en | Default | Obligatoria | Propósito |
 |---|---|---|---|---|
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` / `POSTGRES_PORT` | `docker-compose.yml` | `postgres` / *default sólo dev* / `lince_grc` / `5432` | No | Credenciales del contenedor local. Se aplican al inicializar el volumen por primera vez |
+| `POSTGRES_BIND` | `docker-compose.yml` | `127.0.0.1` | No | Interfaz donde se publica PostgreSQL. `127.0.0.1` sólo da acceso al propio equipo. En el servidor on-premise compartido, la IP de LAN del servidor más una `POSTGRES_PASSWORD` fuerte |
 | `DATABASE_URL` | `db/connection.py:42` | — | **Sí** | DSN PostgreSQL. `postgres://` se normaliza a `postgresql://`. No se añade `sslmode`: en Neon debe ir en la URL (`?sslmode=require`) |
 | `LINCE_AUTH_ENABLED` | `app.py:174, 325` | `true` | No | Sólo `false` o `0` desactivan el login |
 | `LINCE_ACCESS_PASSWORD` | `app.py:186` | — | Si el login está activo | Contraseña única compartida |
@@ -529,7 +530,8 @@ Respuesta(texto, citas usadas, proveedor, bloqueada)  → la UI muestra los art�
 
 | Elemento | Estado |
 |---|---|
-| BD local | `docker-compose.yml`: un servicio `postgres:16-alpine`, contenedor `lince-postgres`, volumen `lince_pgdata`, `restart: unless-stopped`, puerto publicado sólo en `127.0.0.1`, credenciales desde `.env` y healthcheck con `pg_isready`. Sin red dedicada ni backups |
+| BD local / on-premise | `docker-compose.yml`: un servicio `postgres:16-alpine`, contenedor `lince-postgres`, volumen `lince_pgdata`, `restart: unless-stopped`, puerto publicado en `POSTGRES_BIND` (por defecto `127.0.0.1`), credenciales desde `.env` y healthcheck con `pg_isready`. Sin red dedicada ni backups |
+| Modalidades de trabajo | **(a) Local:** cada desarrollador levanta su propio compose en su equipo. **(b) Servidor on-premise del proyecto:** la BD queda en loopback y sólo la usan los procesos del servidor. Para conectarse desde otra máquina, preferir un túnel SSH (`ssh -L 5432:127.0.0.1:5432 servidor`) antes que publicar el puerto en la LAN |
 | App | **No contenedorizada.** No existen Dockerfile, `.dockerignore`, Procfile ni `railway.json` |
 | PaaS previsto | Railway + Neon (`docs/IMPLEMENTACION.md:156-163`). Start command documentado: `streamlit run app.py --server.port=$PORT --server.address=0.0.0.0`. Se configura en el panel de Railway; `railpack-plan.json` sólo fija Python 3.11 |
 | TLS | Streamlit sirve HTTP plano. En PaaS el TLS lo termina la plataforma. Hacia Neon depende de `sslmode=require` en la URL |
