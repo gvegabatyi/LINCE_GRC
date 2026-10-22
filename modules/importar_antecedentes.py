@@ -86,9 +86,9 @@ def render() -> None:
 
     st.info(
         "⚠️ **Los datos extraídos de documentos son borradores no validados.** "
-        "No acreditan cumplimiento y no modifican automáticamente tratamientos existentes. "
-        "Un candidato importado no cuenta para la completitud documental MPI hasta que "
-        "el usuario lo revise, complete y valide en el módulo 📋 Tratamientos.",
+        "No acreditan cumplimiento y no modifican automáticamente tratamientos existentes: "
+        "cada candidato requiere revisión humana antes de incorporarse al RAT, y luego debe "
+        "completarse y validarse en el módulo ☷ Tratamientos (RAT).",
         icon="🛡️",
     )
 
@@ -1459,9 +1459,8 @@ def _tab_revisar_candidatos() -> None:
                 )
 
                 st.caption(
-                    "ℹ️ El tratamiento se creará en la base de datos con el estado: "
-                    "*'Creado desde importación; pendiente de caracterización y validación en Tratamientos (RAT)'*. "
-                    "No cuenta para la completitud documental MPI hasta su validación formal."
+                    "ℹ️ El tratamiento se incorporará al RAT con los datos extraídos. "
+                    "Revise y complete sus 11 numerales en ☷ Tratamientos (RAT) antes de considerarlo validado."
                 )
 
                 if st.button("✅ Crear Tratamiento", type="primary", key=f"btn_crear_{cand_id}"):

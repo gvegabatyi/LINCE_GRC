@@ -1,63 +1,26 @@
 """
-Módulo Dashboard — Panel de Control GRC y Estado MPI (Fase 2A).
-Muestra métricas consolidadas y el indicador interno de completitud documental del MPI.
+Módulo Dashboard — Panel de control de cumplimiento integral.
+Métricas consolidadas, plazos de derechos de los titulares, evaluaciones,
+distribución del RAT y auditorías recientes.
 """
 
 import streamlit as st
 import pandas as pd
 
+from db.repositories.derechos import get_solicitudes_df, resumen_plazos
 from db.repositories.empresas import get_empresas_df
 from db.repositories.evaluaciones import get_evaluaciones_df
 from db.repositories.tratamientos import get_tratamientos_df
 from db.repositories.visitas import get_visitas_df
-from services.mpi_service import calcular_completitud_mpi
 from utils.constants import (
     ESTADO_EVALUACION_DISPLAY,
-    AVISO_COMPLETITUD_DOCUMENTAL,
-    semaforo_porcentaje,
 )
 from services.checklist_service import calcular_porcentaje, nivel_cumplimiento
 
 
 def render() -> None:
-    # Inyección de estilos de terminal eficiente y paleta técnica
-    st.markdown("""
-    <style>
-        .terminal-tag-ok {
-            color: #10B981;
-            background-color: rgba(16, 185, 129, 0.12);
-            border: 1px solid rgba(16, 185, 129, 0.35);
-            padding: 1px 7px;
-            border-radius: 4px;
-            font-family: monospace;
-            font-size: 0.85rem;
-            font-weight: 700;
-            display: inline-block;
-        }
-        .terminal-tag-pending {
-            color: #EF4444;
-            background-color: rgba(239, 68, 68, 0.12);
-            border: 1px solid rgba(239, 68, 68, 0.35);
-            padding: 1px 7px;
-            border-radius: 4px;
-            font-family: monospace;
-            font-size: 0.85rem;
-            font-weight: 700;
-            display: inline-block;
-        }
-        .terminal-card {
-            background-color: #161F30;
-            border: 1px solid #1E293B;
-            border-left: 3px solid #10B981;
-            border-radius: 6px;
-            padding: 14px 18px;
-            margin-bottom: 12px;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-
     st.header("◈ Panel de Control GRC")
-    st.caption("LINCE GRC // Telemetría y Cumplimiento Normativo (Ley N° 21.719 · Decreto N° 662)")
+    st.caption("LINCE GRC // Cumplimiento integral de protección de datos personales · Ley N° 19.628 modificada por la Ley N° 21.719 · Ley N° 21.663")
 
     df_emp  = get_empresas_df()
     df_eval = get_evaluaciones_df()
@@ -86,46 +49,20 @@ def render() -> None:
     st.markdown("---")
 
     # ==========================================================================
-    # SECCIÓN FASE 2A: COMPLETITUD DOCUMENTAL DEL MPI
+    # DERECHOS DE LOS TITULARES: PLAZOS LEGALES (todas las empresas)
     # ==========================================================================
-    st.subheader("◈ Estado de Completitud Documental MPI (Decreto N° 662)")
-    st.caption(AVISO_COMPLETITUD_DOCUMENTAL)
-
-    if not df_emp.empty:
-        empresa_map = {f"{r['id']} - {r['nombre']} ({r['rut']})": r["id"] for _, r in df_emp.iterrows()}
-        emp_sel_label = st.selectbox("Selecciona una empresa para revisar su estado MPI:", list(empresa_map.keys()), key="dash_mpi_emp")
-        emp_id = empresa_map[emp_sel_label]
-
-        info_mpi = calcular_completitud_mpi(emp_id)
-        pct = info_mpi["porcentaje"]
-
-        col_m1, col_m2 = st.columns([1, 2])
-        with col_m1:
-            st.metric("Nivel de Completitud Fase 2A", f"{pct:.1f}%", delta=semaforo_porcentaje(pct), delta_color="off")
-            st.progress(int(pct), text=f"{pct:.0f}% completado")
-
-        with col_m2:
-            st.markdown("##### Desglose de Requisitos Documentales (Art. 3 Decreto N° 662):")
-            reqs = info_mpi["requisitos"]
-            
-            tag_ok = '<span class="terminal-tag-ok">[OK]</span>'
-            tag_pend = '<span class="terminal-tag-pending">[--]</span>'
-
-            c_r1, c_r2 = st.columns(2)
-            with c_r1:
-                st.markdown(f"{tag_ok if reqs['perfil_activo'] else tag_pend} &nbsp; **Perfil MPI y Rep. Legal (Art. 3 a)**", unsafe_allow_html=True)
-                st.markdown(f"{tag_ok if reqs['delegado_activo'] else tag_pend} &nbsp; **Delegado DPD Designado (Arts. 3 b, 6 y 11)**", unsafe_allow_html=True)
-                st.markdown(f"{tag_ok if reqs['rat_registrado'] else tag_pend} &nbsp; **Tratamientos en RAT (Art. 3 d)**", unsafe_allow_html=True)
-            with c_r2:
-                st.markdown(f"{tag_ok if reqs['rat_11_numerales_completos'] else tag_pend} &nbsp; **11 Numerales del RAT Completos**", unsafe_allow_html=True)
-                st.markdown(f"{tag_ok if reqs['evidencia_vinculada'] else tag_pend} &nbsp; **Evidencia de Respaldo Adjunta**", unsafe_allow_html=True)
-
-            if info_mpi["detalles"]:
-                with st.expander("▲ Requisitos pendientes de completar", expanded=False):
-                    for det in info_mpi["detalles"]:
-                        st.markdown(f"**[!]** {det}")
-    else:
-        st.info("Registra al menos una empresa para habilitar el seguimiento del MPI.")
+    st.subheader("⚖ Solicitudes de Derechos de los Titulares")
+    df_sol = get_solicitudes_df()
+    resumen = resumen_plazos(df_sol)
+    d1, d2, d3, d4 = st.columns(4)
+    d1.metric("En plazo", resumen["en_plazo"])
+    d2.metric("Por vencer", resumen["por_vencer"])
+    d3.metric("Vencidas", resumen["vencida"])
+    d4.metric("Respondidas", resumen["respondida"])
+    if resumen["vencida"]:
+        st.error(f"Hay {resumen['vencida']} solicitud(es) con plazo legal vencido. Revise el módulo ⚖ Derechos de los Titulares.")
+    elif resumen["por_vencer"]:
+        st.warning(f"Hay {resumen['por_vencer']} solicitud(es) próximas a vencer.")
 
     st.markdown("---")
 

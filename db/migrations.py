@@ -121,6 +121,59 @@ def _aplicar_paso_8(cursor) -> None:
         cursor.execute("ALTER TABLE tratamientos ALTER COLUMN rat_ambito_territorial TYPE TEXT")
 
 
+def _aplicar_paso_9(cursor) -> None:
+    """
+    PASO 9: solicitudes de ejercicio de derechos de los titulares
+    (Ley 19.628 arts. 12 y 16 · Ley 21.719 arts. 4 a 11). Idempotente.
+    Minimización: del titular sólo se guarda lo necesario para identificarlo
+    y responderle (art. 11 letras a y b).
+    """
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS solicitudes_derechos (
+            id                      SERIAL PRIMARY KEY,
+            empresa_id              INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+            tratamiento_id          INTEGER REFERENCES tratamientos(id) ON DELETE SET NULL,
+            folio                   VARCHAR(40),
+            derecho                 VARCHAR(40) NOT NULL,
+            canal                   VARCHAR(60),
+            fecha_ingreso           DATE NOT NULL,
+            regimen                 VARCHAR(20) NOT NULL,
+            titular_nombre          VARCHAR(255) NOT NULL,
+            titular_contacto        VARCHAR(255),
+            representante           VARCHAR(255),
+            identidad_verificada    BOOLEAN NOT NULL DEFAULT FALSE,
+            metodo_verificacion     VARCHAR(255),
+            descripcion             TEXT,
+            bloqueo_solicitado      BOOLEAN NOT NULL DEFAULT FALSE,
+            bloqueo_vencimiento     DATE,
+            bloqueo_resuelto_en     DATE,
+            bloqueo_resultado       VARCHAR(30),
+            fecha_vencimiento       DATE NOT NULL,
+            prorrogada              BOOLEAN NOT NULL DEFAULT FALSE,
+            prorroga_motivo         TEXT,
+            estado                  VARCHAR(30) NOT NULL DEFAULT 'recibida',
+            fecha_acuse             DATE,
+            fecha_respuesta         DATE,
+            medio_respuesta         VARCHAR(100),
+            fundamento_respuesta    TEXT,
+            evidencia_respuesta_id  INTEGER REFERENCES evidencias(id) ON DELETE SET NULL,
+            created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    cursor.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_solicitud_folio ON solicitudes_derechos (empresa_id, folio)"
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_solicitud_empresa_estado ON solicitudes_derechos (empresa_id, estado)"
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_solicitud_vencimiento ON solicitudes_derechos (fecha_vencimiento)"
+    )
+
+
 def init_db() -> None:
     """
     Inicializa y migra la base de datos de forma segura e idempotente (Fase 1 y Fase 2A).
@@ -502,7 +555,20 @@ def init_db() -> None:
                 "Revise el log del servidor."
             ) from exc
 
-        # Confirmar toda la transacción de migración (Fase 1, 2A, 2A.2, 2A.3 y Paso 8)
+        # ==================================================================
+        # PASO 9: solicitudes de ejercicio de derechos de los titulares
+        # ==================================================================
+        try:
+            with conn.cursor() as c_p9:
+                _aplicar_paso_9(c_p9)
+        except Exception as exc:
+            _log(f"[migrations] Error en Paso 9: {type(exc).__name__}: {exc}")
+            raise RuntimeError(
+                f"Error en migración Paso 9 (solicitudes de derechos) [{type(exc).__name__}]. "
+                "Revise el log del servidor."
+            ) from exc
+
+        # Confirmar toda la transacción de migración (Fase 1, 2A, 2A.2, 2A.3 y Pasos 8-9)
         conn.commit()
 
     except RuntimeError as exc:

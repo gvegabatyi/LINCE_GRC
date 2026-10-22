@@ -12,6 +12,7 @@
   - Ley N° 21.663, Marco de Ciberseguridad.
   - Decreto Supremo N° 662 (Hacienda), que reglamenta los Modelos de Prevención de Infracciones (MPI) del art. 49.
   - El MPI es un componente voluntario de la plataforma, no su alcance. No describir Lince como un "generador de MPI".
+- **Modelo objetivo:** plataforma **SaaS multi-tenant**. Todo diseño nuevo (tablas, caché, autenticación, copiloto, infraestructura) debe considerar el aislamiento por cliente. Ver `docs/AUDITORIA_ESTADO_PROYECTO.md` §14, "Visión SaaS".
 - **Lenguaje:** Python 3.11 (`runtime.txt`).
 - **Framework UI:** Streamlit (ejecución reactiva por reruns).
 - **Base de Datos:** PostgreSQL en Neon (Serverless) / Docker Local, conexión vía `psycopg2` y variable `DATABASE_URL`.
@@ -33,7 +34,8 @@
 │       ├── tratamientos.py    # Repositorio RAT (con caché R2.1)
 │       ├── evaluaciones.py    # Repositorio Evaluaciones
 │       ├── visitas.py         # Repositorio Visitas y Auditorías
-│       └── evidencias.py      # Repositorio Evidencias
+│       ├── evidencias.py      # Repositorio Evidencias
+│       └── derechos.py        # Repositorio Solicitudes de Derechos (escrituras por id + empresa_id)
 ├── modules/                   # Capa de presentación (UI Streamlit). NO debe contener SQL crudo
 ├── services/                  # Lógica de negocio pesada, parsers (DOCX, Excel) y cálculos
 ├── utils/                     # Constantes, validadores y componentes visuales

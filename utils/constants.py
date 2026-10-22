@@ -224,12 +224,6 @@ AVISO_ESTADOS_OFICIALES = (
     "Estas atribuciones corresponden exclusivamente a la Agencia de Protección de Datos Personales."
 )
 
-AVISO_COMPLETITUD_DOCUMENTAL = (
-    "💡 **Indicador Interno:** Este porcentaje es un indicador interno de completitud documental de Fase 2A. "
-    "No constituye certificación oficial, no garantiza aprobación por la Agencia de Protección de Datos Personales "
-    "y no acredita por sí solo el cumplimiento material de la Ley N° 19.628."
-)
-
 def semaforo_porcentaje(valor: float) -> str:
     """Devuelve estado técnico de terminal según porcentaje (0-100)."""
     if valor is None:
@@ -241,3 +235,57 @@ def semaforo_porcentaje(valor: float) -> str:
     if valor >= 25:
         return f"◆ BAJO ({valor:.0f}%)"
     return f"■ CRÍTICO ({valor:.0f}%)"
+
+
+# ==============================================================================
+# DERECHOS DE LOS TITULARES (Ley 19.628 art. 12/16 · Ley 21.719 arts. 4-11)
+# ==============================================================================
+DERECHOS_TITULAR = [
+    ("acceso", "Acceso (art. 5)"),
+    ("rectificacion", "Rectificación (art. 6)"),
+    ("supresion", "Supresión (art. 7)"),
+    ("oposicion", "Oposición (art. 8)"),
+    ("decisiones_automatizadas", "Oposición a decisiones automatizadas (art. 8 bis)"),
+    ("bloqueo", "Bloqueo del tratamiento (art. 8 ter)"),
+    ("portabilidad", "Portabilidad (art. 9)"),
+]
+DERECHOS_TITULAR_MAP = dict(DERECHOS_TITULAR)
+
+# Derechos cuya solicitud habilita pedir bloqueo temporal (Ley 21.719 art. 11)
+DERECHOS_CON_BLOQUEO_TEMPORAL = {"rectificacion", "supresion", "oposicion"}
+
+CANALES_SOLICITUD = [
+    "Correo electrónico",
+    "Formulario web",
+    "Medio electrónico equivalente",
+    "Presencial / carta",
+    "Otro",
+]
+
+ESTADOS_SOLICITUD = [
+    ("recibida", "Recibida"),
+    ("en_analisis", "En análisis"),
+    ("acogida", "Acogida"),
+    ("acogida_parcial", "Acogida parcialmente"),
+    ("denegada", "Denegada"),
+    ("cerrada", "Cerrada"),
+]
+ESTADOS_SOLICITUD_MAP = dict(ESTADOS_SOLICITUD)
+# Estados en que la solicitud ya fue respondida: el plazo deja de correr
+ESTADOS_SOLICITUD_RESPONDIDA = {"acogida", "acogida_parcial", "denegada", "cerrada"}
+
+# Feriados nacionales de Chile para el cómputo de días hábiles.
+# Criterio conservador: sólo se incluyen feriados con certeza. Omitir un feriado
+# acorta el plazo calculado (lado seguro); incluir uno erróneo lo alargaría.
+# MANTENER: validar y agregar cada año contra el calendario oficial.
+FERIADOS_CHILE = {
+    # 2026
+    "2026-01-01", "2026-04-03", "2026-04-04", "2026-05-01", "2026-05-21",
+    "2026-06-21", "2026-06-29", "2026-07-16", "2026-08-15", "2026-09-18",
+    "2026-09-19", "2026-10-12", "2026-10-31", "2026-11-01", "2026-12-08",
+    "2026-12-25",
+    # 2027
+    "2027-01-01", "2027-03-26", "2027-03-27", "2027-05-01", "2027-05-21",
+    "2027-06-21", "2027-06-28", "2027-07-16", "2027-08-15", "2027-09-18",
+    "2027-09-19", "2027-10-11", "2027-11-01", "2027-12-08", "2027-12-25",
+}

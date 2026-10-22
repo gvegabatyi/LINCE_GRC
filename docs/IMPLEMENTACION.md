@@ -1,5 +1,7 @@
 # Lince GRC - Documentación de Implementación
 
+> **Documento histórico (Fases 1 y 2A).** Describe el diseño funcional original. El **estado vigente** está en [`AUDITORIA_ESTADO_PROYECTO.md`](AUDITORIA_ESTADO_PROYECTO.md): arquitectura real, montaje local sin claves, defectos corregidos y ruta al MVP. Si ambos documentos difieren, prevalece la auditoría.
+
 **Gobierno, Riesgo y Cumplimiento**
 
 ## Índice

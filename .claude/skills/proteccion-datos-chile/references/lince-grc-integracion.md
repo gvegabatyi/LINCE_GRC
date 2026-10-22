@@ -24,7 +24,7 @@ Estado al 2026-10-22. "No modelado" indica una brecha de producto, no un incumpl
 | Seguridad de la información | art. 14 quinquies; Ley 21.663 | Evaluaciones y evidencias | Parcial |
 | Evidencias y trazabilidad | art. 3 a) (responsabilidad demostrable) | `modules/evidencias.py` | Cubierto |
 | Visitas, entrevistas y auditorías internas | art. 48; DS 662 art. 13 d) | `modules/visitas.py` | Cubierto |
-| Derechos de los titulares (acceso, rectificación, supresión, oposición, portabilidad, bloqueo) | arts. 4–11 | — | No modelado: falta flujo de solicitudes con los plazos de 30 días corridos y 2 días hábiles |
+| Derechos de los titulares (acceso, rectificación, supresión, oposición, portabilidad, bloqueo) | Ley 19.628 arts. 12, 16 · Ley 21.719 arts. 4–11 | `modules/derechos.py`, `services/plazos_service.py`, tabla `solicitudes_derechos` | Cubierto: plazos por régimen según fecha de ingreso (2 días hábiles / 30 días corridos + prórroga), bloqueo 2 días hábiles, denegación fundada, respaldo de respuesta |
 | Transparencia y política de tratamiento | art. 14 ter | Evidencias | Parcial |
 | Vulneraciones de seguridad (registro, Agencia, titulares) | art. 14 sexies | — | No modelado |
 | Incidentes de ciberseguridad (CSIRT: 3 h / 72 h / 15 días) | Ley 21.663 arts. 9, 27 | — | No modelado |

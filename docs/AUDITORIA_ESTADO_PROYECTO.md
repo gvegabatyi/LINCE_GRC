@@ -31,6 +31,9 @@ La migración se probó además sobre una copia de una base existente y con refe
 | S-01 | `docker-compose.yml`: puerto sólo en `127.0.0.1` (configurable con `POSTGRES_BIND`), modo de desarrollo **sin claves** (`trust`) acotado a loopback, healthcheck | `docker compose config`; conexión sin contraseña verificada sobre un volumen nuevo |
 | S-04 / S-07 / S-12 | `.streamlit/config.toml`: `address=127.0.0.1`, `maxUploadSize=10`, `showErrorDetails=false` | Sondeo del servidor real (no responde desde la IP de red) |
 | S-08 | Exportación XLSX: neutralización de fórmulas | `TestExportacion` |
+| MVP-6 | **Módulo Derechos de los Titulares** (tabla `solicitudes_derechos`, PASO 9): plazos por régimen según la fecha de ingreso (estándar dual Ley 19.628 / Ley 21.719), prórroga única, bloqueo temporal, denegación fundada, respaldo de respuesta, aislamiento por empresa. Integración con Dashboard y exportación (hoja 13, minimizada) | `tests/test_derechos.py` (16) + recorrido en la app real |
+| UI | El Dashboard ya no muestra el indicador de "completitud documental MPI", que presentaba el MPI como si fuera el alcance de Lince. Se corrigieron los textos que afirmaban que lo importado no cuenta para ese indicador (era falso, D-05) | Recorrido en la app real |
+| Fuentes | Las fuentes legales oficiales (PDF de LeyChile y DOCX del DS 662) quedan versionadas en `addons/normativa/fuentes/` con su SHA-256. El corpus regenerado desde ellas es idéntico al publicado | Regeneración + comparación |
 | — | Invalidación de cachés dependientes al editar o borrar una empresa; textos de la UI que afirmaban "Neon" o un estado de BD sin comprobarlo; `pandas` fijado; `.gitignore` ampliado; `AGENTS.md` alineado con el código | Revisión de código + suite de tests |
 
 ---
@@ -68,6 +71,8 @@ La migración se probó además sobre una copia de una base existente y con refe
 
 **El MPI es un componente de Lince, no su alcance.** El MPI es voluntario (art. 49). El cumplimiento de la ley y el deber de prevención (art. 48) alcanzan a todo responsable, adopte o no un MPI.
 
+**Modelo objetivo: plataforma SaaS** multi-cliente (ver §14, "Visión SaaS"). Esta definición condiciona el diseño de datos, identidad e infraestructura desde ahora.
+
 **Modelo de uso actual.** Es una herramienta de **consultoría multiempresa**: un equipo consultor gestiona varias empresas cliente (el piloto es Serviphar, del rubro farmacéutico). La separación por empresa es hoy un **contexto de trabajo**, no un aislamiento de seguridad entre clientes (ver §11 y §12.4).
 
 **Qué no hace Lince.** No certifica, registra ni valida MPI: esas atribuciones son exclusivas de la Agencia de Protección de Datos Personales (DS 662 arts. 14-17). Los estados de certificación que registra la app son declarativos (`utils/constants.py:221-225`).
@@ -79,10 +84,10 @@ La migración se probó además sobre una copia de una base existente y con refe
 | Dimensión | Estado | Comentario |
 |---|---|---|
 | Madurez funcional | **Prototipo funcional avanzado (Fase 2A)** | RAT de 11 numerales, importación documental, MPI y delegado, evaluaciones, visitas, evidencias, exportación y addon normativo |
-| Cobertura normativa | **Parcial** | 7 de 19 ámbitos legales cubiertos, 7 parciales y 5 no modelados (§13). Faltan derechos de los titulares, vulneraciones, incidentes CSIRT y EIPD |
+| Cobertura normativa | **Parcial** | 8 de 19 ámbitos legales cubiertos, 7 parciales y 4 no modelados (§13). Faltan vulneraciones, incidentes CSIRT, EIPD y exposición sancionatoria |
 | Preparación para producción | **No apto** | Autenticación temporal de contraseña única, sin usuarios ni roles, sin bitácora, sin backups, la app se conecta como superusuario a la BD, sin contenedor de la app (§11) |
 | Integridad del esquema | **Mejorada** | FK faltantes y longitud de campo corregidas (PASO 8). Persiste: migraciones sin versionado y DDL en cada arranque (§7.4) |
-| Pruebas | **Básicas** | 31 tests: addon normativo, regresión de las correcciones e integración de migraciones contra PostgreSQL efímero. Sin tests de UI ni de la mayoría de los repositorios. Sin CI |
+| Pruebas | **Básicas** | 47 tests: addon normativo, regresión de las correcciones, módulo de derechos e integración contra PostgreSQL efímero. Sin tests de UI ni de la mayoría de los repositorios. Sin CI |
 | IA en runtime | **Opcional y desactivada por defecto** | Copiloto RAG con salvaguardas de segregación (§9) |
 
 **Los cinco puntos de mayor riesgo vigentes** (tras las correcciones del 2026-10-22):
@@ -116,16 +121,19 @@ serviphar_grc_lite/
 │       ├── visitas.py              # Visitas + checklist JSONB · sin cache
 │       ├── evidencias.py           # Evidencias como URL externa · sin cache
 │       ├── mpi_gobernanza.py       # Perfil MPI, delegado (versionados con 'activo'), catálogo normativo · cache 3600 s
-│       └── importaciones.py        # Importaciones documentales y candidatos RAT · cache 15-30 s
+│       ├── importaciones.py        # Importaciones documentales y candidatos RAT · cache 15-30 s
+│       └── derechos.py             # Solicitudes de derechos de los titulares · cache 30 s · escrituras por id+empresa
 │
 ├── services/                       # LÓGICA DE NEGOCIO sin UI
 │   ├── extraccion_service.py       # Extracción determinista (sin IA ni OCR) desde XLSX/CSV/DOCX/PDF/MD/TXT
 │   ├── deduplicacion_service.py    # SHA-256, validación estructural de archivos, duplicados (contiene SQL: deuda)
-│   ├── mpi_service.py              # Indicador de completitud documental MPI
+│   ├── plazos_service.py           # Plazos legales de derechos (régimen dual, días hábiles, feriados)
+│   ├── mpi_service.py              # Completitud documental MPI (no expuesto en la UI)
 │   └── checklist_service.py        # Puntaje del checklist de visitas
 │
 ├── modules/                        # CAPA DE PRESENTACIÓN Streamlit (no debe contener SQL)
 │   ├── dashboard.py · empresas.py · evaluaciones.py · mpi_gobernanza.py · tratamientos.py
+│   ├── derechos.py                 # Derechos de los titulares: bandeja, alta, gestión y base legal
 │   ├── importar_antecedentes.py    # Bandeja de importación RAT (1.746 líneas: candidato a refactor)
 │   └── visitas.py · evidencias.py · exportar.py
 │
@@ -136,14 +144,16 @@ serviphar_grc_lite/
 ├── addons/                         # ADDONS OPCIONALES, desacoplados del núcleo
 │   └── normativa/                  # Citas normativas verificadas + copiloto LLM (§9)
 │       ├── citas.py · copiloto.py · pii_filter.py · ui.py
-│       ├── corpus/*.json           # 4 normas segmentadas por artículo (336 KB)
+│       ├── fuentes/                # FUENTE DE VERDAD: PDF LeyChile + DOCX DS 662 oficiales, con SHA-256
+│       ├── corpus/*.json           # 4 normas segmentadas por artículo, generadas desde fuentes/ (336 KB)
 │       ├── conocimiento/           # Copia sincronizada de la skill de dominio del proyecto
 │       ├── tools/                  # build_corpus.py, sync_conocimiento.py (sólo en desarrollo)
 │       └── requirements-copiloto.txt  # anthropic==2.1.0 (opcional)
 │
 ├── tests/
 │   ├── test_addon_normativa.py     # 21 tests del addon (sin BD, red ni anthropic)
-│   └── test_correcciones.py        # 10 tests: regresión + integración con PostgreSQL (LINCE_TEST_DATABASE_URL)
+│   ├── test_correcciones.py        # 10 tests: regresión + integración con PostgreSQL (LINCE_TEST_DATABASE_URL)
+│   └── test_derechos.py            # 16 tests: plazos y estándar dual + integración del repositorio
 │
 ├── docs/
 │   ├── IMPLEMENTACION.md           # Documentación funcional histórica (Fases 1-2A)
@@ -187,7 +197,7 @@ Navegador ──HTTP/WebSocket──► Streamlit server (1 proceso Python)
                                   ├─ login temporal (hmac.compare_digest)   app.py:168-216
                                   ├─ init_db()  @st.cache_resource          app.py:226-237  (1 vez por PROCESO)
                                   ├─ empresa activa en st.session_state     app.py:251-261
-                                  ├─ menú (10 opciones) → módulo.render()   app.py:285-364
+                                  ├─ menú (11 opciones) → módulo.render()   app.py:285-364
                                   │      └─ repositorio → psycopg2.connect() por llamada (sin pool)
                                   └─ addon normativa (import perezoso, try/except)
 ```
@@ -241,10 +251,10 @@ streamlit run app.py
 | Comprobación | Comando o acción | Resultado esperado |
 |---|---|---|
 | Servidor vivo | `curl -s localhost:8501/_stcore/health` | `ok` |
-| Esquema creado | Abrir la app e iniciar sesión. `init_db()` crea el esquema en el primer rerun | 11 tablas en `lince_grc` (`\dt` en psql) |
+| Esquema creado | Abrir la app e iniciar sesión. `init_db()` crea el esquema en el primer rerun | 12 tablas en `lince_grc` (`\dt` en psql) |
 | Seeds | `SELECT count(*) FROM normativa_referencias;` | 21 |
-| Tests | `python -m unittest discover -s tests -t .` | `Ran 31 tests ... OK (skipped=5)`. Los 5 omitidos son de integración |
-| Tests de integración | Con una BD **desechable**: `LINCE_TEST_DATABASE_URL=postgresql://... python -m unittest discover -s tests -t .` (ejemplo de contenedor en `tests/test_correcciones.py`) | `Ran 31 tests ... OK` |
+| Tests | `python -m unittest discover -s tests -t .` | `Ran 47 tests ... OK (skipped=9)`. Los 9 omitidos son de integración |
+| Tests de integración | Con una BD **desechable**: `LINCE_TEST_DATABASE_URL=postgresql://... python -m unittest discover -s tests -t .` (ejemplo de contenedor en `tests/test_correcciones.py`) | `Ran 47 tests ... OK` |
 | Addon | Menú **§ Normativa** → Consultar artículo → Ley 21.719, "14 sexies" | Texto literal del artículo |
 
 ### 5.4 Problemas frecuentes
@@ -268,6 +278,7 @@ Todas las variables que lee el código:
 | `DATABASE_URL` | `db/connection.py:42` | — | **Sí** | DSN PostgreSQL. `postgres://` se normaliza a `postgresql://`. No se añade `sslmode`: en Neon debe ir en la URL (`?sslmode=require`) |
 | `LINCE_AUTH_ENABLED` | `app.py:174, 325` | `true` | No | Sólo `false` o `0` desactivan el login |
 | `LINCE_ACCESS_PASSWORD` | `app.py:186` | — | Si el login está activo | Contraseña única compartida. La plantilla de desarrollo local desactiva el login (`LINCE_AUTH_ENABLED=false`). El código mantiene `true` por defecto como protección si falta el `.env` |
+| `LINCE_SABADO_HABIL` | `services/plazos_service.py` | `true` | No | Cómputo de días hábiles de los plazos de derechos. `true` (conservador) cuenta el sábado como hábil y da plazos más cortos. Pendiente de revisión profesional |
 | `LINCE_COPILOTO_PROVEEDOR` | `addons/normativa/copiloto.py:72` | `desactivado` | No | `desactivado` · `anthropic` · `ollama`. Un valor inválido se trata como `desactivado` |
 | `LINCE_COPILOTO_MODELO` | `copiloto.py:75` | `claude-opus-5-5` / `llama3.1` | No | Modelo del proveedor |
 | `ANTHROPIC_API_KEY` | SDK `anthropic` (implícita) | — | Con `anthropic` | Credencial de la API |
@@ -293,7 +304,7 @@ Todas las variables que lee el código:
 
 ### 7.1 Tablas
 
-`init_db()` (`db/migrations.py:52`) crea 11 tablas en una sola transacción.
+`init_db()` crea 12 tablas en una sola transacción.
 
 | Tabla | Creada en | Propósito | Claves relevantes |
 |---|---|---|---|
@@ -308,6 +319,7 @@ Todas las variables que lee el código:
 | `mpi_delegados` | PASO 4 | Delegado de protección de datos, versionado con `activo` | UNIQUE parcial `(empresa_id) WHERE activo` |
 | `importaciones_documentales` | PASO 6 + PASO 7 | Importación: metadatos, hash, matriz JSONB | índices `(empresa_id)`, `(empresa_id, hash_sha256)`, **no UNIQUE** |
 | `importacion_tratamientos_candidatos` | PASO 6 | Candidatos RAT para revisión humana | índices `(empresa_id, estado_revision)`, `(importacion_id)` |
+| `solicitudes_derechos` | PASO 9 | Solicitudes de derechos de los titulares: derecho, régimen, plazos, prórroga, bloqueo, respuesta | `empresa_id` FK CASCADE; UNIQUE `(empresa_id, folio)`; índices `(empresa_id, estado)`, `(fecha_vencimiento)` |
 
 No hay restricciones CHECK: los estados son VARCHAR libres validados sólo en la UI.
 
@@ -375,15 +387,16 @@ El dato obsoleto dura como máximo un TTL.
 
 | Menú | Archivo | Función | ¿Usa la empresa activa de la sesión? |
 |---|---|---|---|
-| Dashboard | `modules/dashboard.py` | KPIs globales y completitud MPI por empresa | No (lecturas globales) |
+| Dashboard | `modules/dashboard.py` | KPIs globales y alertas de plazos de derechos (todas las empresas) | No (lecturas globales) |
 | Empresas | `modules/empresas.py` | CRUD; **fija** `empresa_activa_id` | Es la fuente |
+| Derechos de los Titulares | `modules/derechos.py` | Bandeja con semáforo de plazos, alta, gestión (acuse, prórroga, bloqueo, respuesta) y base legal | Sí (la lee y la fija) |
 | Evaluaciones GRC | `modules/evaluaciones.py` | Contenedor de proyecto (estado, avance, alcance) | No (selector propio) |
 | Perfil MPI y Delegado | `modules/mpi_gobernanza.py` | DS 662 art. 3 a)-c) y arts. 6-13; catálogo normativo | No (selector propio) |
 | Tratamientos (RAT) | `modules/tratamientos.py` | Alta del RAT con los 11 numerales. **Sin edición** (`update_tratamiento` se importa y no se usa) | No |
 | Importar Antecedentes RAT | `modules/importar_antecedentes.py` | Bandeja documental: carga, mapeo, candidatos y conciliación | Sí (la lee y la reescribe) |
 | Visitas / Auditorías | `modules/visitas.py` | Visita en terreno con checklist de 15 preguntas | No |
 | Evidencias | `modules/evidencias.py` | Evidencia como URL, ligada a una visita | No |
-| Exportar Informe | `modules/exportar.py` | XLSX de 12 hojas, en memoria | No (**exporta todas las empresas**) |
+| Exportar Informe | `modules/exportar.py` | XLSX de 13 hojas, en memoria | No (**exporta todas las empresas**) |
 | § Normativa | `addons/normativa/ui.py` | Citas, búsqueda y copiloto | No aplica (sin BD) |
 
 La regla de AGENTS.md "sincronizar siempre con `empresa_activa_id`" se cumple en la importación. En Tratamientos y Visitas el selector se preselecciona con la empresa activa, y está **fuera** del `st.form`, de modo que evaluaciones y evidencias se recalculan al cambiarlo **[CORREGIDO D-06]**. Dashboard, Evaluaciones, Perfil MPI, Evidencias y Exportar mantienen selectores propios o lecturas globales.
@@ -405,7 +418,9 @@ La regla de AGENTS.md "sincronizar siempre con `empresa_activa_id`" se cumple en
 8. **Conciliación humana**: crear un tratamiento nuevo, conciliar campo a campo con uno existente o ignorar.
 9. **Reapertura**: una importación guardada se puede reabrir para continuar el mapeo.
 
-### 8.3 Indicador de completitud MPI (`services/mpi_service.py`)
+### 8.3 Indicador de completitud MPI (`services/mpi_service.py`, no expuesto en la UI)
+
+**Retirado de la interfaz (2026-10-22):** presentaba el MPI como si fuera el alcance de Lince. El cálculo se conserva en el servicio por si se reincorpora dentro del módulo del MPI.
 
 | Requisito | Peso |
 |---|---|
@@ -419,9 +434,25 @@ El 100% sólo se alcanza si se cumplen todos los requisitos. En cualquier otro c
 
 ### 8.4 Exportación
 
-XLSX con openpyxl generado en memoria (`modules/exportar.py:410-412`), con 12 hojas: empresas, tratamientos, visitas, evidencias, resumen, evaluaciones, perfil MPI, delegado, RAT DS 662, referencias normativas, importaciones y candidatos.
+XLSX con openpyxl generado en memoria (`modules/exportar.py`), con 13 hojas: empresas, tratamientos, visitas, evidencias, resumen, evaluaciones, perfil MPI, delegado, RAT DS 662, referencias normativas, importaciones y candidatos y solicitudes de derechos (sin datos del titular).
 - Las hojas 6 a 12 están envueltas en `except Exception: pass`: si fallan, se omiten sin aviso.
 - **[CORREGIDO S-08]** `_neutralizar_formulas()` fuerza a texto toda celda que openpyxl interpretó como fórmula. El informe no usa fórmulas propias, así que cualquier celda de ese tipo proviene de datos del usuario.
+
+### 8.5 Derechos de los titulares (`modules/derechos.py`)
+
+**Estándar dual.** El régimen exigible se determina por la **fecha de ingreso** de cada solicitud (`services/plazos_service.py`):
+
+| Fecha de ingreso | Régimen | Plazo de respuesta | Prórroga | Si se deniega o no se responde |
+|---|---|---|---|---|
+| Hasta el 30-11-2026 | Ley 19.628 vigente (art. 16) | 2 días hábiles | No procede | Amparo ante el juez de letras en lo civil |
+| Desde el 01-12-2026 | Ley 21.719 (art. 11) | 30 días corridos | Una vez, hasta 30 días corridos | Reclamo ante la Agencia en 30 días hábiles (art. 41); la denegación debe ser fundada |
+
+- **Plazo de referencia:** para solicitudes bajo la ley vigente, la UI muestra también el plazo que regiría con la Ley 21.719, como preparación.
+- **Bloqueo temporal** (sólo junto a rectificación, supresión u oposición): respuesta en 2 días hábiles.
+- **Días hábiles:** criterio **conservador**, el sábado se cuenta como hábil (configurable con `LINCE_SABADO_HABIL=false`). Domingos y `FERIADOS_CHILE` (`utils/constants.py`, mantenimiento anual) nunca son hábiles. Sólo se listan feriados con certeza: omitir uno acorta el plazo, que es el lado seguro. `PENDIENTE DE REVISIÓN PROFESIONAL`.
+- **Flujo:** recibida → en análisis (acuse) → [prórroga] → acogida, acogida parcial, denegada o cerrada. La denegación total o parcial exige fundamento. La respuesta se vincula a una evidencia, porque el art. 11 obliga a guardar respaldo de la remisión.
+- **Seguridad:** toda escritura filtra por `id` **y** `empresa_id`, cerrando para este módulo el patrón S-06.
+- **Minimización:** del titular sólo se guarda lo necesario para identificarlo y responderle. La hoja 13 del Excel no incluye ni su nombre ni su contacto.
 
 ---
 
@@ -438,7 +469,7 @@ Lince usa IA en dos planos separados: **en runtime** (el copiloto normativo, opc
 | `LEY-19628` | 27 | Texto anterior a la reforma (rige hasta el 30-11-2026); 3 transitorios |
 | `DEC-662-HAC` | 20 | Arts. 1-20, completo |
 
-- **Fuente:** PDF oficiales de LeyChile/BCN (versiones con fecha en cada JSON) y el DOCX del DS 662. Los originales no están en el repositorio.
+- **Fuente de verdad:** PDF oficiales de LeyChile/BCN y DOCX del DS 662, **versionados en `addons/normativa/fuentes/`** con versión y SHA-256 en su README. El corpus regenerado desde esas fuentes es idéntico al publicado.
 - **Construcción:** `addons/normativa/tools/build_corpus.py`, herramienta sólo de desarrollo que requiere PyMuPDF. Hace cuatro cosas:
   1. extrae el texto y limpia el ruido de página y las notas marginales de LeyChile;
   2. reconstruye los párrafos;
@@ -648,7 +679,8 @@ Discrepancias vigentes entre las reglas de `AGENTS.md` (objetivo) y el código:
 
 ### 12.5 Pruebas
 
-- **31 tests** (`python -m unittest discover -s tests -t .`):
+- **47 tests** (`python -m unittest discover -s tests -t .`):
+  - `tests/test_derechos.py` (16): router temporal, días hábiles con sábado y feriados, prórroga única, estándar dual y estados del plazo; más integración del repositorio (régimen y vencimiento al crear, prórroga, denegación fundada y aislamiento entre empresas);
   - `tests/test_addon_normativa.py` (21): corpus, recuperación, filtro de PII, copiloto y segregación;
   - `tests/test_correcciones.py` (10): regresión de D-01, D-03 y S-08, más **integración de migraciones contra PostgreSQL real**. La integración se activa con `LINCE_TEST_DATABASE_URL`, apuntando siempre a una BD desechable; ejecuta `init_db()` dos veces y verifica tablas, FK, tipos, seed y anulación de colgantes.
 - **Sin cobertura:** la UI de `modules/` y la mayoría de los repositorios. Sin CI.
@@ -672,7 +704,7 @@ Discrepancias vigentes entre las reglas de `AGENTS.md` (objetivo) y el código:
 | Seguridad de la información | art. 14 quinquies; Ley 21.663 | Parcial | Checklist y evidencias |
 | Evidencias y trazabilidad | art. 3 a) | **Cubierto** | `evidencias` (URL) |
 | Visitas y auditorías internas | art. 48; DS 662 art. 13 d) | **Cubierto** | `visitas` |
-| Derechos de los titulares | arts. 4-11 | **No modelado** | Falta flujo de solicitudes con plazos de 30 días corridos (prorrogables) y 2 días hábiles para el bloqueo |
+| Derechos de los titulares | Ley 19.628 arts. 12, 16 · Ley 21.719 arts. 4-11 | **Cubierto** | `modules/derechos.py` (ver §8.5). Pendiente: autenticación de identidad según el procedimiento que fije la Agencia, y gratuidad o cobro (art. 10) |
 | Transparencia y política | art. 14 ter | Parcial | Sólo como evidencia |
 | Vulneraciones de seguridad | art. 14 sexies | **No modelado** | Registro, reporte a la Agencia y comunicación a titulares |
 | Incidentes de ciberseguridad | Ley 21.663 arts. 9, 27 | **No modelado** | Plazos ante el CSIRT: alerta en 3 h, actualización en 72 h (24 h para operador de importancia vital) e informe en 15 días |
@@ -696,6 +728,34 @@ El detalle por requisito vive en `.claude/skills/proteccion-datos-chile/referenc
 
 La secuencia propuesta, derivada de esta auditoría, se valida con la dirección del proyecto. **Las fases 0 y 1 son prerrequisito de producción.** Fecha de referencia: el régimen reformado rige desde el **01-12-2026**.
 
+### Visión SaaS: implicancias de diseño
+
+Lince se diseñará como **plataforma SaaS**: cada organización cliente es un *tenant* aislado. El modelo actual (un consultor con varias empresas en una misma BD, aislamiento sólo de contexto) **no es apto para SaaS tal como está**. Estas son las decisiones que conviene tomar **antes** de ampliar el modelo de datos, porque cambiarlas después es caro:
+
+| Área | Estado actual | Requisito SaaS | Notas |
+|---|---|---|---|
+| Tenancy | `empresas` global, sin tenant; escrituras por `id` en varios repositorios (S-06) | `tenant_id` en todas las tablas de negocio y aislamiento a nivel BD con **Row-Level Security** de PostgreSQL. Alternativas: *schema-per-tenant* o *BD-per-tenant* para clientes que exijan aislamiento físico | El módulo de derechos ya filtra las escrituras por `empresa_id`: es el patrón a generalizar a `tenant_id` |
+| Identidad | Contraseña única compartida | Usuarios por tenant; roles (administrador del cliente, delegado, operador, auditor externo, consultor); OIDC/SSO y MFA; bitácora inmutable | Es el bloque 5 del MVP. En SaaS pasa a ser bloqueante |
+| Rol legal del operador | — | El operador de Lince es **encargado de tratamiento** de sus clientes (Ley 21.719 art. 15 bis): contrato de encargo, seguridad (14 quinquies), aviso de vulneraciones al responsable, devolución o supresión al término. Hosting, proveedor LLM y otros son **subencargados** que el cliente debe autorizar por escrito. Hosting fuera de Chile implica **transferencia internacional** (arts. 27-28) | El propio Lince debe tener su RAT, su evaluación de impacto (EIPD) y su política de seguridad: "comer la propia comida" |
+| Ley 21.663 | — | El art. 4 incluye entre los servicios esenciales los "servicios digitales y servicios de tecnología de la información gestionados por terceros". **Evaluar si el operador de Lince queda sujeto** al deber de reporte de incidentes al CSIRT (3 h / 72 h / 15 días) y a la gestión de riesgos de ciberseguridad | `PENDIENTE DE VERIFICACIÓN` con asesoría legal y la calificación de la Agencia Nacional de Ciberseguridad |
+| Datos por tenant | — | Backups y restauración por tenant; exportación completa (portabilidad del cliente) y borrado verificable al término del contrato; retención configurable | La matriz cruda de las importaciones (JSONB) debe entrar en esa política |
+| Caché y estado | `st.cache_data` por proceso, compartida entre usuarios; sesión en memoria | Claves de caché con `tenant_id` (nunca compartir resultados entre tenants); caché compartida (p. ej. Redis) para escalar; sesiones con afinidad o sin estado | Riesgo de fuga entre tenants si una función cacheada no incluye el tenant en sus parámetros |
+| Copiloto LLM | Sin acceso a la BD | Aislamiento por tenant, medición de uso y costo por tenant, límites de uso, y opción de proveedor local para clientes que no admitan transferencia internacional | La segregación actual (§9.4) es una buena base |
+| Migraciones | DDL en el arranque de cada proceso | Migraciones versionadas como paso de release, compatibles con varias réplicas y con despliegues sin corte | Bloque 4 del MVP |
+| Operación | Mono-instancia | Observabilidad por tenant, SLA, *feature flags*, *onboarding* automatizado, medición para facturación | — |
+
+**Decisión de stack a evaluar temprano.** Streamlit permite prototipar rápido, pero tiene límites para un SaaS multi-tenant:
+- estado de sesión en la memoria del proceso;
+- escalado horizontal que requiere afinidad de sesión;
+- autenticación y autorización que no son nativas;
+- control fino de la UI y las APIs limitado.
+
+Hay dos caminos:
+- **(a)** mantener Streamlit detrás de un gateway de autenticación (OIDC) con RLS en la BD, como solución puente;
+- **(b)** separar ya una API (p. ej. FastAPI) con la lógica y los repositorios actuales, y un frontend independiente.
+
+La capa `db/` + `services/` actual se puede reutilizar en ambos casos, porque la UI no contiene SQL. Recomendación: decidirlo junto con el diseño de tenancy, antes de construir los módulos funcionales pendientes.
+
 ### Ruta crítica al Producto Mínimo Viable (MVP)
 
 **Definición propuesta de MVP:** una instancia desplegada en la que una organización real (el piloto Serviphar) pueda:
@@ -705,7 +765,7 @@ La secuencia propuesta, derivada de esta auditoría, se valida con la dirección
 4. demostrar quién hizo qué, con usuarios y bitácora;
 5. operar con datos respaldados y recuperables.
 
-Todo antes de la exigibilidad del 01-12-2026. El MPI completo y la IA avanzada quedan **después** del MVP.
+Todo antes de la exigibilidad del 01-12-2026. El MPI completo y la IA avanzada quedan **después** del MVP. El MVP se valida con el piloto, pero los bloques 2 a 5 deben construirse ya con el diseño multi-tenant de la sección anterior, para no rehacerlos al pasar a SaaS.
 
 | # | Bloque | Contenido | Área | Estado |
 |---|---|---|---|---|
@@ -714,7 +774,7 @@ Todo antes de la exigibilidad del 01-12-2026. El MPI completo y la IA avanzada q
 | 3 | Datos protegidos | Backups con restauración probada, rol de aplicación con mínimo privilegio, rotación de credenciales | Infraestructura | Pendiente |
 | 4 | Migraciones versionadas | Alembic (o equivalente) como paso de release; sin DDL en el arranque ni en la UI | Infraestructura / BD | Pendiente |
 | 5 | Identidad y bitácora | Usuarios, roles, autenticación robusta y bitácora de auditoría (reemplaza S-03) | App / Infraestructura | Pendiente |
-| 6 | Derechos de los titulares | Flujo con plazos legales y evidencia (Fase 3) | App | Pendiente |
+| 6 | Derechos de los titulares | Flujo con plazos legales por régimen (estándar dual) y evidencia | App | **Hecho (2026-10-22)** |
 | 7 | Vulneraciones e incidentes | Flujo único que derive las obligaciones de la Ley 21.719 y la Ley 21.663 (Fase 3) | App | Pendiente |
 
 Los bloques 2 a 5 son del área de infraestructura y pueden avanzar en paralelo con los bloques funcionales 6 y 7.
@@ -748,7 +808,7 @@ Los bloques 2 a 5 son del área de infraestructura y pueden avanzar en paralelo 
 
 | Módulo | Base legal | Contenido mínimo |
 |---|---|---|
-| Derechos de los titulares | arts. 4-11 | Ingreso, autenticación, plazos (30 días corridos + prórroga; 2 días hábiles para el bloqueo), respuesta fundada, evidencia del envío, reclamo ante la Agencia |
+| ~~Derechos de los titulares~~ | arts. 4-11 | **Hecho:** ver §8.5 |
 | Vulneraciones de seguridad | art. 14 sexies | Registro obligatorio, evaluación de riesgo, reporte a la Agencia "sin dilaciones indebidas", comunicación a titulares (datos sensibles, menores de 14, datos financieros) |
 | Incidentes de ciberseguridad | Ley 21.663 arts. 9, 27 | Clasificación de efecto significativo y reloj de reporte al CSIRT (3 h / 72 h o 24 h / 15 días). Conviene un flujo único de incidentes que derive las obligaciones de ambas leyes |
 | Evaluación de impacto (EIPD) | art. 15 ter | Disparadores obligatorios, metodología, riesgo inherente y residual, mitigación |

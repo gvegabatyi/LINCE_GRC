@@ -1,99 +1,76 @@
 # Lince GRC
 
-**Gobierno, Riesgo y Cumplimiento**
-
 **Plataforma integral de cumplimiento e implementación de protección de datos personales en Chile.**
 
-> **¿Te incorporas al proyecto?** Empieza por [`docs/AUDITORIA_ESTADO_PROYECTO.md`](docs/AUDITORIA_ESTADO_PROYECTO.md): estructura, arquitectura, montaje del entorno, modelo de datos, IA, seguridad, estado real y hoja de ruta.
+> **¿Te incorporas al proyecto?** Empieza por [`docs/AUDITORIA_ESTADO_PROYECTO.md`](docs/AUDITORIA_ESTADO_PROYECTO.md): estructura, arquitectura, montaje del entorno, modelo de datos, IA, seguridad, estado real y ruta al MVP.
 
 Lince GRC integra en una sola plataforma el cumplimiento de:
-- la **Ley N° 19.628 modificada por la Ley N° 21.719** (régimen completo: principios, licitud, derechos de los titulares, deberes del responsable, seguridad, vulneraciones, evaluación de impacto, encargados, transferencias, sanciones y prevención de infracciones);
-- la **Ley N° 21.663, Marco de Ciberseguridad** (incidentes y reporte al CSIRT Nacional);
-- el **Decreto Supremo N° 662 del Ministerio de Hacienda**, que reglamenta los **Modelos de Prevención de Infracciones (MPI)** del artículo 49.
+- la **Ley N° 19.628 modificada por la Ley N° 21.719**: régimen completo de protección de datos, exigible desde el 01-12-2026;
+- la **Ley N° 21.663, Marco de Ciberseguridad**: incidentes y reporte al CSIRT Nacional;
+- el **Decreto Supremo N° 662 de Hacienda**: Modelos de Prevención de Infracciones (MPI).
 
-El MPI es uno de los componentes de Lince, no su alcance: la plataforma acompaña la implementación y la gestión del cumplimiento de la ley completa, adopte o no la organización un MPI. Su arquitectura modular abarca:
-- Registro de actividades de tratamiento (RAT) y caracterización de datos.
-- Diagnóstico, evaluaciones y auditorías de cumplimiento.
-- Modelo de Prevención de Infracciones (MPI) y Delegado de Protección de Datos.
-- Privacidad y protección de datos personales.
-- Gestión de riesgos y controles.
-- Auditoría, hallazgos y planes de acción.
-- Ciberseguridad.
-- Continuidad operacional.
-- Gestión de terceros.
-- Otros estándares, normas y obligaciones aplicables.
+El MPI es uno de los componentes de Lince, no su alcance. La plataforma acompaña la implementación y la gestión del cumplimiento de la ley completa, adopte o no la organización un MPI.
+
+**Modelo objetivo:** plataforma **SaaS** multi-cliente. Las implicancias de diseño (tenancy, identidad, rol legal del operador, stack) están en [`docs/AUDITORIA_ESTADO_PROYECTO.md` §14](docs/AUDITORIA_ESTADO_PROYECTO.md#14-hacia-dónde-va-lince-hoja-de-ruta).
 
 ---
 
-## Módulos Disponibles en Fase 2A
+## Estado actual (prototipo funcional, Fase 2A)
 
-1. **🏠 Dashboard:** Métricas consolidadas e **Indicador Interno de Completitud Documental del MPI** (Decreto N° 662).
-2. **🏢 Empresas:** Catálogo y gestión de organizaciones del grupo.
-3. **📁 Evaluaciones GRC:** Contenedor principal de proyectos de evaluación por empresa y período.
-4. **🛡️ Perfil MPI y Delegado (Nuevo Fase 2A):**
-   - Individualización del responsable y representante legal *(Art. 3 letra a)*.
-   - Designación y canal de contacto público accesible del Delegado DPD *(Arts. 3 b, 7, 8 y 11)*.
-   - Declaración de idoneidad, recursos y facultades suficientes *(Arts. 3 c, 9 y 10)*.
-   - Separación estricta entre estados internos de implementación y estados registrales oficiales *(Arts. 15 y 17)*.
-   - Catálogo interactivo de Trazabilidad Normativa del Decreto N° 662.
-5. **📋 Tratamientos (RAT Ampliado - Fase 2A):**
-   - Registro con los **11 numerales taxativos del Art. 3 letra d)** (tipos de datos/sensibles, ámbito territorial, bases administradas, titulares, fines, procedencia, base licitud, destinatarios, transferencias internacionales, plazos y perfilamiento).
-   - Sección separada de campos complementarios GRC.
-6. **📥 Importar Antecedentes RAT (Fase 2A.2):**
-   - Bandeja documental para ingesta temporal en memoria de antecedentes (.xlsx, .csv, .docx, .pdf con texto, .md, .txt).
-   - Validación estructural ZIP/OpenXML y verificación de texto en PDF sin OCR.
-   - Mapeo manual de columnas a los 11 numerales RAT con límite de 4.000 caracteres por campo.
-   - Conciliación campo a campo contra tratamientos existentes con confirmación humana explícita.
-   - Política de minimización: los datos extraídos no se exportan ni se usan en completitud hasta su validación manual.
-7. **🔍 Visitas / Auditorías:** Auditorías en terreno con checklist de seguridad (15 puntos) y tipo de visita.
-8. **📸 Evidencias:** Registro de enlaces a evidencias fotográficas y documentales externas vinculables al Perfil, Delegado y RAT.
-9. **📊 Exportar Informe:** Descarga de informe consolidado Excel de 12 hojas profesionales (incluye `IMPORTACIONES_DOCUMENTALES` y `CANDIDATOS_RAT` en modo solo metadatos).
+| Menú | Función |
+|---|---|
+| ◈ Dashboard | Métricas consolidadas y alertas de plazos de solicitudes de derechos |
+| ▣ Empresas | Gestión de empresas cliente y selección de la empresa activa |
+| ◬ Evaluaciones GRC | Contenedor de proyectos de evaluación por empresa y período |
+| ◆ Perfil MPI y Delegado | Responsable y representante legal, delegado de protección de datos y estados declarativos de certificación (DS 662) |
+| ☷ Tratamientos (RAT) | Registro de actividades de tratamiento con los 11 numerales del DS 662 art. 3 d) |
+| ⚖ Derechos de los Titulares | Solicitudes de acceso, rectificación, supresión, oposición, bloqueo y portabilidad, con plazos legales según la fecha de ingreso (Ley 19.628 vigente / Ley 21.719 desde el 01-12-2026), prórroga, bloqueo temporal, respuesta fundada y respaldo |
+| ⤓ Importar Antecedentes RAT | Importación documental (XLSX, CSV, DOCX, PDF con texto, MD, TXT), mapeo de columnas y conciliación con revisión humana |
+| ⌖ Visitas / Auditorías | Auditorías en terreno con checklist de seguridad de 15 puntos |
+| ◫ Evidencias | Enlaces a evidencias externas (no almacena archivos) |
+| ⇲ Exportar Informe | Informe Excel consolidado de 13 hojas |
+| § Normativa | Citas literales verificadas de las 4 normas, búsqueda y copiloto LLM opcional segregado de los datos |
 
----
-
-## ⚠️ Advertencia de Seguridad, Alcance y Uso Operativo
+**Todavía no implementado** (ver la ruta al MVP en el documento de auditoría, §13-§14):
+- registro de vulneraciones (art. 14 sexies) e incidentes de ciberseguridad (Ley 21.663);
+- evaluación de impacto (EIPD);
+- usuarios, roles y bitácora;
+- matriz de riesgos y canal de denuncias del MPI;
+- hallazgos y planes de acción.
 
 > [!CAUTION]
-> - **Aviso de Estados Oficiales:** Los estados oficiales son antecedentes declarativos y documentales. Lince GRC **no certifica, registra, supervisa ni valida oficialmente modelos de prevención de infracciones**. Estas atribuciones corresponden exclusivamente a la Agencia de Protección de Datos Personales.
-> - **Indicador Interno:** El porcentaje de completitud documental es un indicador interno de Fase 2A y no acredita por sí solo el cumplimiento material de la ley.
-> - **Uso Interno:** La plataforma está destinada exclusivamente al consultor/auditor para trabajo en terreno.
-> - **Acceso Remoto y Centralizado:** Se accede mediante navegador web con conexión a Internet desde notebook, PC o tablet hacia Neon PostgreSQL.
-> - **Sin Acceso Externo:** La plataforma **no debe ser abierta a clientes ni terceros externos** en esta etapa.
-> - **Minimización de Datos:** El RUT del delegado es opcional y no se expone públicamente ni en reportes generales.
+> - Lince **no certifica, registra ni valida** modelos de prevención de infracciones: eso corresponde exclusivamente a la Agencia de Protección de Datos Personales. Los estados oficiales que registra la app son declarativos.
+> - **No apto aún para producción ni para acceso de clientes:** el login es una barrera temporal de desarrollo y no hay usuarios, roles ni bitácora.
 
 ---
 
-## Estructura del Código
+## Estructura del repositorio
 
 ```text
-serviphar_grc_lite/
-  ├── app.py                     # Router principal Streamlit
-  ├── db/
-  │   ├── connection.py          # Conexión y transacciones seguras
-  │   ├── migrations.py          # Migraciones seguras e idempotentes (Fase 1 y 2A)
-  │   └── repositories/
-  │       ├── empresas.py        # Repositorio Empresas
-  │       ├── evaluaciones.py    # Repositorio Evaluaciones
-  │       ├── mpi_gobernanza.py  # Repositorio Perfil MPI, Delegado y Normativa (Fase 2A)
-  │       ├── tratamientos.py    # Repositorio RAT con 11 numerales (Fase 2A)
-  │       ├── visitas.py         # Repositorio Visitas y Auditorías
-  │       └── evidencias.py      # Repositorio Evidencias
-  ├── modules/                   # Módulos UI interactivos Streamlit
-  ├── services/                  # Lógica de negocio y cálculo de completitud MPI
-  ├── utils/                     # Constantes, validadores y semáforos
-  ├── requirements.txt           # Dependencias fijadas
-  ├── runtime.txt                # python-3.11
-  └── docs/
-      └── IMPLEMENTACION.md      # Documentación técnica completa
+app.py              Punto de entrada Streamlit: configuración, login, init_db, menú y router
+db/                 Capa de datos: conexión, migraciones idempotentes (init_db) y repositorios
+modules/            Interfaz Streamlit por módulo (sin SQL)
+services/           Lógica de negocio: extracción documental, deduplicación, completitud MPI
+utils/              Constantes de dominio y validadores
+addons/normativa/   Addon: fuentes legales oficiales (fuente de verdad), corpus, citas y copiloto LLM (sin acceso a la BD)
+tests/              Pruebas unittest (incluye integración de migraciones con PostgreSQL)
+docs/               Auditoría del estado del proyecto y documentación funcional histórica
+.claude/skills/     Skill de dominio jurídico para el desarrollo asistido por IA
+docker-compose.yml  PostgreSQL 16 local (sólo 127.0.0.1, sin claves en desarrollo)
+.env.example        Plantilla de configuración de desarrollo local
+AGENTS.md           Reglas para agentes de IA de desarrollo (CLAUDE.md las importa)
 ```
+
+Detalle archivo por archivo: [`docs/AUDITORIA_ESTADO_PROYECTO.md` §3](docs/AUDITORIA_ESTADO_PROYECTO.md#3-estructura-del-repositorio).
 
 ---
 
-## Ejecución Local
+## Ejecución local (sin claves)
 
-Guía completa y verificada (requisitos, verificación y problemas frecuentes): [`docs/AUDITORIA_ESTADO_PROYECTO.md` §5](docs/AUDITORIA_ESTADO_PROYECTO.md#5-montaje-del-entorno-de-desarrollo).
+Requisitos: Docker con Compose v2, Python 3.11 y Git. Guía completa y verificada: [`docs/AUDITORIA_ESTADO_PROYECTO.md` §5](docs/AUDITORIA_ESTADO_PROYECTO.md#5-montaje-del-entorno-de-desarrollo).
 
 ```bash
+git clone https://github.com/gvegabatyi/serviphar-grc-lite.git && cd serviphar-grc-lite
 cp .env.example .env              # desarrollo local sin claves: no hay que editar nada
 docker compose up -d              # PostgreSQL 16 local (sólo 127.0.0.1)
 python3.11 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
@@ -102,4 +79,4 @@ streamlit run app.py              # http://localhost:8501 (el esquema se crea al
 python -m unittest discover -s tests -t .   # pruebas
 ```
 
-Para una BD gestionada (Neon), usar su URL en `DATABASE_URL` con `?sslmode=require`.
+Despliegue en una BD gestionada (Neon): usar su URL en `DATABASE_URL` con `?sslmode=require` y activar el login (`LINCE_AUTH_ENABLED=true`).

@@ -19,6 +19,7 @@ _load_env_file()
 # Importación de módulos UI (rutas absolutas desde la raíz del proyecto)
 from modules import (
     dashboard,
+    derechos,
     empresas,
     evaluaciones,
     mpi_gobernanza,
@@ -288,6 +289,7 @@ OPCIONES_MENU = [
     "◬ Evaluaciones GRC",
     "◆ Perfil MPI y Delegado",
     "☷ Tratamientos (RAT)",
+    "⚖ Derechos de los Titulares",
     "⤓ Importar Antecedentes RAT",
     "⌖ Visitas / Auditorías",
     "◫ Evidencias",
@@ -347,6 +349,8 @@ elif "Perfil MPI" in menu_opcion:
     mpi_gobernanza.render()
 elif "Tratamientos" in menu_opcion:
     tratamientos.render()
+elif "Derechos" in menu_opcion:
+    derechos.render()
 elif "Importar" in menu_opcion:
     importar_antecedentes.render()
 elif "Visitas" in menu_opcion:

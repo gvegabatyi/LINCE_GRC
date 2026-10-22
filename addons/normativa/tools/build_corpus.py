@@ -4,8 +4,10 @@ Genera el corpus normativo del addon a partir de los textos oficiales.
 Herramienta de desarrollo, NO forma parte del runtime de Lince. Requiere
 PyMuPDF (`fitz`) y python-docx, que sólo se usan aquí:
 
-    python addons/normativa/tools/build_corpus.py --leyes "D:/PROYECTO FARMA/leyes" \
-        --decreto "D:/FARMASOFT/decreto 662/Decreto_662_Hacienda_Completo_Editable.docx"
+    python addons/normativa/tools/build_corpus.py
+
+Por defecto lee las fuentes oficiales versionadas en addons/normativa/fuentes/
+(ver su README: origen, versión y SHA-256 de cada documento).
 
 Salida: addons/normativa/corpus/<codigo>.json, un registro por artículo.
 Cambiar el corpus exige volver a verificar la skill proteccion-datos-chile.
@@ -19,6 +21,7 @@ from datetime import date
 from pathlib import Path
 
 CORPUS_DIR = Path(__file__).resolve().parent.parent / "corpus"
+FUENTES_DIR = Path(__file__).resolve().parent.parent / "fuentes"
 
 FUENTES_PDF = {
     "LEY-19628": {
@@ -167,8 +170,9 @@ def _guardar(codigo: str, meta: dict, articulos: list[dict]) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--leyes", required=True, help="Carpeta con los PDF oficiales de LeyChile")
-    ap.add_argument("--decreto", required=True, help="DOCX del Decreto 662")
+    ap.add_argument("--leyes", default=str(FUENTES_DIR), help="Carpeta con los PDF oficiales de LeyChile")
+    ap.add_argument("--decreto", default=str(FUENTES_DIR / "DS-662-Hacienda_13-JUN-2025.docx"),
+                    help="DOCX del Decreto 662")
     args = ap.parse_args()
     CORPUS_DIR.mkdir(parents=True, exist_ok=True)
 

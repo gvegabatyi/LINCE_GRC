@@ -17,6 +17,7 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
+from db.repositories.derechos import get_solicitudes_df
 from db.repositories.empresas import get_empresas_df
 from db.repositories.evaluaciones import get_evaluaciones_df
 from db.repositories.tratamientos import get_tratamientos_df
@@ -32,7 +33,10 @@ from utils.constants import (
     ESTADO_EVALUACION_DISPLAY,
     ESTADOS_MPI_INTERNOS_MAP,
     ESTADOS_MPI_OFICIALES_MAP,
+    DERECHOS_TITULAR_MAP,
+    ESTADOS_SOLICITUD_MAP,
 )
+from services import plazos_service as plazos
 from services.checklist_service import calcular_porcentaje
 
 
@@ -407,6 +411,37 @@ def generar_excel_completo() -> bytes:
     except Exception:
         pass
 
+    # ── Hoja 13: SOLICITUDES_DERECHOS (minimizada: sin nombre ni contacto del titular) ──
+    try:
+        df_sol = get_solicitudes_df()
+        ws13 = wb.create_sheet(title="SOLICITUDES_DERECHOS")
+        ws13.append([
+            "Folio", "Empresa", "Derecho", "Régimen", "Fecha Ingreso", "Vencimiento",
+            "Prorrogada", "Estado", "Estado del Plazo", "Bloqueo Solicitado",
+            "Resultado Bloqueo", "Fecha Acuse", "Fecha Respuesta", "Identidad Verificada",
+        ])
+        for _, r in df_sol.iterrows():
+            venc = pd.to_datetime(r["fecha_vencimiento"]).date()
+            ws13.append([
+                r["folio"],
+                r["empresa"],
+                DERECHOS_TITULAR_MAP.get(r["derecho"], r["derecho"]),
+                "Ley 21.719" if r["regimen"] == plazos.REGIMEN_21719 else "Ley 19.628",
+                str(r["fecha_ingreso"])[:10],
+                str(venc),
+                "Sí" if r["prorrogada"] else "No",
+                ESTADOS_SOLICITUD_MAP.get(r["estado"], r["estado"]),
+                plazos.estado_plazo(r["estado"], venc, r["regimen"]).etiqueta,
+                "Sí" if r["bloqueo_solicitado"] else "No",
+                r["bloqueo_resultado"] or "",
+                str(r["fecha_acuse"])[:10] if pd.notnull(r["fecha_acuse"]) else "",
+                str(r["fecha_respuesta"])[:10] if pd.notnull(r["fecha_respuesta"]) else "",
+                "Sí" if r["identidad_verificada"] else "No",
+            ])
+        _format_sheet(ws13, header_fill, header_font, thin_border)
+    except Exception:
+        pass
+
     _neutralizar_formulas(wb)
     buffer = io.BytesIO()
     wb.save(buffer)
@@ -442,15 +477,18 @@ def render() -> None:
     - **Hoja 5 — RESUMEN:** Métricas ejecutivas y fecha de emisión.
     - **Hoja 6 — EVALUACIONES:** Proyectos GRC por empresa y período.
 
-    **Hojas del Modelo de Prevención de Infracciones (Fase 2A — Decreto N° 662):**
+    **Hojas del Modelo de Prevención de Infracciones (art. 49 Ley 21.719 · Decreto N° 662):**
     - **Hoja 7 — PERFIL_MPI:** Responsable, representante legal, estados interno y oficial *(Art. 3 a; Arts. 15 y 17)*.
     - **Hoja 8 — DELEGADO_DPD:** Delegado DPD, canal de contacto accesible e idoneidad *(Arts. 3 b, c; Arts. 6-13)*.
     - **Hoja 9 — RAT_DECRETO_662:** Registro de Actividades con los **11 numerales taxativos** *(Art. 3 d)*.
     - **Hoja 10 — REFERENCIAS_NORMATIVAS:** Citas y criterios del Decreto N° 662.
 
-    **Hojas de Importación Documental (Fase 2A.2):**
+    **Hojas de Importación Documental:**
     - **Hoja 11 — IMPORTACIONES_DOCUMENTALES:** Historial de archivos importados, hash, estado y candidatos generados.
     - **Hoja 12 — CANDIDATOS_RAT:** Candidatos extraídos, estado de revisión y acción humana aplicada.
+
+    **Derechos de los Titulares:**
+    - **Hoja 13 — SOLICITUDES_DERECHOS:** Folio, derecho, régimen, plazos y estado. Por minimización no incluye nombre ni contacto del titular.
     """)
 
     st.markdown("---")
