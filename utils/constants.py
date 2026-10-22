@@ -231,13 +231,13 @@ AVISO_COMPLETITUD_DOCUMENTAL = (
 )
 
 def semaforo_porcentaje(valor: float) -> str:
-    """Devuelve ícono + texto según porcentaje (0-100)."""
+    """Devuelve estado técnico de terminal según porcentaje (0-100)."""
     if valor is None:
-        return "⚪ Sin datos"
+        return "[--] Sin datos"
     if valor >= 80:
-        return f"🟢 Alto ({valor:.0f}%)"
+        return f"● ALTO ({valor:.0f}%)"
     if valor >= 50:
-        return f"🟡 Medio ({valor:.0f}%)"
+        return f"▲ MEDIO ({valor:.0f}%)"
     if valor >= 25:
-        return f"🟠 Bajo ({valor:.0f}%)"
-    return f"🔴 Crítico ({valor:.0f}%)"
+        return f"◆ BAJO ({valor:.0f}%)"
+    return f"■ CRÍTICO ({valor:.0f}%)"

@@ -20,8 +20,44 @@ from services.checklist_service import calcular_porcentaje, nivel_cumplimiento
 
 
 def render() -> None:
-    st.header("📊 Panel de Control GRC")
-    st.caption("Lince GRC — Gobierno, Riesgo y Cumplimiento (Foco inicial: Ley N° 21.719 / Decreto N° 662)")
+    # Inyección de estilos de terminal eficiente y paleta técnica
+    st.markdown("""
+    <style>
+        .terminal-tag-ok {
+            color: #10B981;
+            background-color: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.35);
+            padding: 1px 7px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            font-weight: 700;
+            display: inline-block;
+        }
+        .terminal-tag-pending {
+            color: #EF4444;
+            background-color: rgba(239, 68, 68, 0.12);
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            padding: 1px 7px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            font-weight: 700;
+            display: inline-block;
+        }
+        .terminal-card {
+            background-color: #161F30;
+            border: 1px solid #1E293B;
+            border-left: 3px solid #10B981;
+            border-radius: 6px;
+            padding: 14px 18px;
+            margin-bottom: 12px;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.header("◈ Panel de Control GRC")
+    st.caption("LINCE GRC // Telemetría y Cumplimiento Normativo (Ley N° 21.719 · Decreto N° 662)")
 
     df_emp  = get_empresas_df()
     df_eval = get_evaluaciones_df()
@@ -32,27 +68,27 @@ def render() -> None:
     c1, c2, c3, c4, c5 = st.columns(5)
 
     with c1:
-        st.metric("🏢 Empresas", len(df_emp))
+        st.metric("◈ Empresas", len(df_emp))
     with c2:
-        st.metric("📁 Evaluaciones GRC", len(df_eval))
+        st.metric("◬ Evaluaciones GRC", len(df_eval))
     with c3:
-        st.metric("📋 Tratamientos (RAT)", len(df_trat))
+        st.metric("☷ Tratamientos (RAT)", len(df_trat))
     with c4:
-        st.metric("🔍 Auditorías", len(df_vis))
+        st.metric("⌖ Auditorías", len(df_vis))
     with c5:
         if not df_vis.empty and "fecha_visita" in df_vis.columns:
             ultima = str(df_vis.iloc[0]["fecha_visita"])
             empresa_vis = str(df_vis.iloc[0].get("empresa", ""))
-            st.metric("🗓️ Última Visita", ultima, delta=empresa_vis, delta_color="off")
+            st.metric("◷ Última Visita", ultima, delta=empresa_vis if empresa_vis else None, delta_color="off")
         else:
-            st.metric("🗓️ Última Visita", "Sin registros")
+            st.metric("◷ Última Visita", "Sin registros")
 
     st.markdown("---")
 
     # ==========================================================================
     # SECCIÓN FASE 2A: COMPLETITUD DOCUMENTAL DEL MPI
     # ==========================================================================
-    st.subheader("🛡️ Estado de Completitud Documental del MPI (Decreto N° 662)")
+    st.subheader("◈ Estado de Completitud Documental MPI (Decreto N° 662)")
     st.caption(AVISO_COMPLETITUD_DOCUMENTAL)
 
     if not df_emp.empty:
@@ -71,19 +107,23 @@ def render() -> None:
         with col_m2:
             st.markdown("##### Desglose de Requisitos Documentales (Art. 3 Decreto N° 662):")
             reqs = info_mpi["requisitos"]
+            
+            tag_ok = '<span class="terminal-tag-ok">[OK]</span>'
+            tag_pend = '<span class="terminal-tag-pending">[--]</span>'
+
             c_r1, c_r2 = st.columns(2)
             with c_r1:
-                st.markdown(f"{'✅' if reqs['perfil_activo'] else '❌'} **Perfil MPI y Rep. Legal (Art. 3 a)**")
-                st.markdown(f"{'✅' if reqs['delegado_activo'] else '❌'} **Delegado DPD Designado (Arts. 3 b, 6 y 11)**")
-                st.markdown(f"{'✅' if reqs['rat_registrado'] else '❌'} **Tratamientos en RAT (Art. 3 d)**")
+                st.markdown(f"{tag_ok if reqs['perfil_activo'] else tag_pend} &nbsp; **Perfil MPI y Rep. Legal (Art. 3 a)**", unsafe_allow_html=True)
+                st.markdown(f"{tag_ok if reqs['delegado_activo'] else tag_pend} &nbsp; **Delegado DPD Designado (Arts. 3 b, 6 y 11)**", unsafe_allow_html=True)
+                st.markdown(f"{tag_ok if reqs['rat_registrado'] else tag_pend} &nbsp; **Tratamientos en RAT (Art. 3 d)**", unsafe_allow_html=True)
             with c_r2:
-                st.markdown(f"{'✅' if reqs['rat_11_numerales_completos'] else '❌'} **11 Numerales del RAT Completos**")
-                st.markdown(f"{'✅' if reqs['evidencia_vinculada'] else '❌'} **Evidencia de Respaldo Adjunta**")
+                st.markdown(f"{tag_ok if reqs['rat_11_numerales_completos'] else tag_pend} &nbsp; **11 Numerales del RAT Completos**", unsafe_allow_html=True)
+                st.markdown(f"{tag_ok if reqs['evidencia_vinculada'] else tag_pend} &nbsp; **Evidencia de Respaldo Adjunta**", unsafe_allow_html=True)
 
             if info_mpi["detalles"]:
-                with st.expander("⚠️ Pendientes para completar la documentación", expanded=False):
+                with st.expander("▲ Requisitos pendientes de completar", expanded=False):
                     for det in info_mpi["detalles"]:
-                        st.markdown(f"- {det}")
+                        st.markdown(f"**[!]** {det}")
     else:
         st.info("Registra al menos una empresa para habilitar el seguimiento del MPI.")
 
@@ -94,7 +134,7 @@ def render() -> None:
         col_izq, col_der = st.columns([3, 2])
 
         with col_izq:
-            st.subheader("📁 Evaluaciones GRC Activas")
+            st.subheader("▸ Evaluaciones GRC Activas")
             activas = df_eval[df_eval["estado"].isin(["en_progreso", "en_revision"])]
             if activas.empty:
                 st.info("No hay evaluaciones en progreso. Las evaluaciones finalizadas o en borrador no se muestran aquí.")
@@ -111,16 +151,16 @@ def render() -> None:
                         st.markdown("")
 
         with col_der:
-            st.subheader("📈 Tratamientos por Empresa")
+            st.subheader("▸ Distribución RAT por Empresa")
             if not df_trat.empty:
                 conteo = df_trat["empresa"].value_counts()
-                st.bar_chart(conteo, color="#1E88E5")
+                st.bar_chart(conteo, color="#0EA5E9")
             else:
                 st.info("No hay tratamientos registrados.")
     else:
         col_izq, col_der = st.columns([3, 2])
         with col_izq:
-            st.subheader("🏢 Últimas 5 Empresas Registradas")
+            st.subheader("▸ Empresas Registradas Recientes")
             if not df_emp.empty:
                 st.dataframe(
                     df_emp.head(5)[["id", "nombre", "rut", "contacto", "email", "created_at"]],
@@ -130,16 +170,16 @@ def render() -> None:
             else:
                 st.info("No hay empresas registradas. Ve al módulo **Empresas** para agregar la primera.")
         with col_der:
-            st.subheader("📈 Tratamientos por Empresa")
+            st.subheader("▸ Distribución RAT por Empresa")
             if not df_trat.empty:
-                st.bar_chart(df_trat["empresa"].value_counts(), color="#1E88E5")
+                st.bar_chart(df_trat["empresa"].value_counts(), color="#0EA5E9")
             else:
                 st.info("No hay tratamientos registrados.")
 
     # ── Auditorías recientes ──────────────────────────────────────────────────
     if not df_vis.empty:
         st.markdown("---")
-        st.subheader("🛡️ Últimas 5 Auditorías y Puntajes")
+        st.subheader("▸ Auditorías y Puntajes Recientes")
         vis_view = df_vis[
             ["empresa", "fecha_visita", "tipo_visita", "auditor", "puntaje", "observaciones"]
         ].head(5).copy()
