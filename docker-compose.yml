@@ -1,8 +1,13 @@
-# PostgreSQL para desarrollo de Lince GRC (equipo local o servidor on-premise).
-# Credenciales desde .env (ver .env.example). El default de la contraseña es SÓLO
-# para desarrollo en loopback. Por defecto el puerto se publica sólo en 127.0.0.1;
-# para dar acceso desde la LAN definir POSTGRES_BIND (p. ej. la IP del servidor)
-# y una POSTGRES_PASSWORD fuerte.
+# PostgreSQL para desarrollo de Lince GRC en el equipo de cada desarrollador.
+#
+# Modo de desarrollo SIN CLAVES: POSTGRES_HOST_AUTH_METHOD=trust acepta conexiones
+# sin contraseña. Es seguro sólo porque el puerto se publica en 127.0.0.1 (este
+# equipo). NO cambiar POSTGRES_BIND a una IP de red manteniendo trust: la base
+# quedaría abierta a toda la LAN. Para un servidor compartido usar
+# POSTGRES_HOST_AUTH_METHOD=scram-sha-256 con una POSTGRES_PASSWORD fuerte.
+#
+# Nota: el método de autenticación se fija al inicializar el volumen por primera
+# vez; un volumen existente conserva el método con el que fue creado.
 services:
   postgres:
     image: postgres:16-alpine
@@ -10,8 +15,9 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgrespassword}
       POSTGRES_DB: ${POSTGRES_DB:-lince_grc}
+      POSTGRES_HOST_AUTH_METHOD: ${POSTGRES_HOST_AUTH_METHOD:-trust}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
     ports:
       - "${POSTGRES_BIND:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
     volumes:

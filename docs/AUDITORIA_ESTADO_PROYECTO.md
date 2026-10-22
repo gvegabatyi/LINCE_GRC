@@ -28,7 +28,7 @@ La migración se probó además sobre una copia de una base existente y con refe
 | D-06 | El selector de empresa queda fuera del `st.form` en Tratamientos y Visitas, preseleccionado con la empresa activa | Simulación de clon |
 | D-09 | Las empresas del importador se identifican por "nombre (RUT)" | Revisión de código |
 | D-12 | **Dependencias incompatibles:** `pyarrow` sin fijar instalaba la 26.x (exige NumPy ≥ 2) junto a `numpy` 1.26 (exigido por Streamlit 1.32), y `st.dataframe` fallaba en toda la UI. Se fijan `numpy==1.26.4` y `pyarrow==17.0.0` | Instalación limpia + simulación de clon |
-| S-01 | `docker-compose.yml`: puerto sólo en `127.0.0.1`, credenciales desde `.env`, healthcheck | `docker compose config` |
+| S-01 | `docker-compose.yml`: puerto sólo en `127.0.0.1` (configurable con `POSTGRES_BIND`), modo de desarrollo **sin claves** (`trust`) acotado a loopback, healthcheck | `docker compose config`; conexión sin contraseña verificada sobre un volumen nuevo |
 | S-04 / S-07 / S-12 | `.streamlit/config.toml`: `address=127.0.0.1`, `maxUploadSize=10`, `showErrorDetails=false` | Sondeo del servidor real (no responde desde la IP de red) |
 | S-08 | Exportación XLSX: neutralización de fórmulas | `TestExportacion` |
 | — | Invalidación de cachés dependientes al editar o borrar una empresa; textos de la UI que afirmaban "Neon" o un estado de BD sin comprobarlo; `pandas` fijado; `.gitignore` ampliado; `AGENTS.md` alineado con el código | Revisión de código + suite de tests |
@@ -217,8 +217,8 @@ git clone https://github.com/gvegabatyi/serviphar-grc-lite.git
 cd serviphar-grc-lite
 
 # 2. Configuración: un único .env para docker compose y para la app
-cp .env.example .env                   # definir POSTGRES_PASSWORD, la MISMA clave en DATABASE_URL,
-                                       # y LINCE_ACCESS_PASSWORD
+cp .env.example .env                   # modo desarrollo local SIN CLAVES: no requiere edición
+                                       # (PostgreSQL trust + app sin login, todo en 127.0.0.1)
 
 # 3. Base de datos local (contenedor lince-postgres, volumen lince_pgdata, sólo 127.0.0.1)
 docker compose up -d
@@ -261,11 +261,13 @@ Todas las variables que lee el código:
 
 | Variable | Leída en | Default | Obligatoria | Propósito |
 |---|---|---|---|---|
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` / `POSTGRES_PORT` | `docker-compose.yml` | `postgres` / *default sólo dev* / `lince_grc` / `5432` | No | Credenciales del contenedor local. Se aplican al inicializar el volumen por primera vez |
-| `POSTGRES_BIND` | `docker-compose.yml` | `127.0.0.1` | No | Interfaz donde se publica PostgreSQL. `127.0.0.1` sólo da acceso al propio equipo. En el servidor on-premise compartido, la IP de LAN del servidor más una `POSTGRES_PASSWORD` fuerte |
+| `POSTGRES_USER` / `POSTGRES_DB` / `POSTGRES_PORT` | `docker-compose.yml` | `postgres` / `lince_grc` / `5432` | No | Usuario, base y puerto del contenedor local |
+| `POSTGRES_HOST_AUTH_METHOD` | `docker-compose.yml` | `trust` | No | `trust` permite desarrollo local **sin contraseña**. Es seguro sólo con `POSTGRES_BIND=127.0.0.1`. En un servidor compartido: `scram-sha-256` + `POSTGRES_PASSWORD`. Se fija al inicializar el volumen por primera vez |
+| `POSTGRES_PASSWORD` | `docker-compose.yml` | vacía | Sólo sin `trust` | Contraseña del superusuario cuando no se usa `trust` |
+| `POSTGRES_BIND` | `docker-compose.yml` | `127.0.0.1` | No | Interfaz donde se publica PostgreSQL. `127.0.0.1` sólo da acceso al propio equipo. **Nunca** una IP de red con `trust` |
 | `DATABASE_URL` | `db/connection.py:42` | — | **Sí** | DSN PostgreSQL. `postgres://` se normaliza a `postgresql://`. No se añade `sslmode`: en Neon debe ir en la URL (`?sslmode=require`) |
 | `LINCE_AUTH_ENABLED` | `app.py:174, 325` | `true` | No | Sólo `false` o `0` desactivan el login |
-| `LINCE_ACCESS_PASSWORD` | `app.py:186` | — | Si el login está activo | Contraseña única compartida |
+| `LINCE_ACCESS_PASSWORD` | `app.py:186` | — | Si el login está activo | Contraseña única compartida. La plantilla de desarrollo local desactiva el login (`LINCE_AUTH_ENABLED=false`). El código mantiene `true` por defecto como protección si falta el `.env` |
 | `LINCE_COPILOTO_PROVEEDOR` | `addons/normativa/copiloto.py:72` | `desactivado` | No | `desactivado` · `anthropic` · `ollama`. Un valor inválido se trata como `desactivado` |
 | `LINCE_COPILOTO_MODELO` | `copiloto.py:75` | `claude-opus-5-5` / `llama3.1` | No | Modelo del proveedor |
 | `ANTHROPIC_API_KEY` | SDK `anthropic` (implícita) | — | Con `anthropic` | Credencial de la API |
@@ -531,7 +533,7 @@ Respuesta(texto, citas usadas, proveedor, bloqueada)  → la UI muestra los art�
 | Elemento | Estado |
 |---|---|
 | BD local / on-premise | `docker-compose.yml`: un servicio `postgres:16-alpine`, contenedor `lince-postgres`, volumen `lince_pgdata`, `restart: unless-stopped`, puerto publicado en `POSTGRES_BIND` (por defecto `127.0.0.1`), credenciales desde `.env` y healthcheck con `pg_isready`. Sin red dedicada ni backups |
-| Modalidades de trabajo | **(a) Local:** cada desarrollador levanta su propio compose en su equipo. **(b) Servidor on-premise del proyecto:** la BD queda en loopback y sólo la usan los procesos del servidor. Para conectarse desde otra máquina, preferir un túnel SSH (`ssh -L 5432:127.0.0.1:5432 servidor`) antes que publicar el puerto en la LAN |
+| Modalidades de trabajo | **(a) Local, sin claves (por defecto):** cada desarrollador clona, copia `.env.example` a `.env` y levanta su propio compose. Ni la BD ni la app piden credenciales, y ambas responden sólo en `127.0.0.1`. **(b) Servidor on-premise del proyecto:** el acceso remoto se hace por túnel SSH (`ssh -L 8501:127.0.0.1:8501 -L 5432:127.0.0.1:5432 servidor`) sin publicar puertos en la LAN |
 | App | **No contenedorizada.** No existen Dockerfile, `.dockerignore`, Procfile ni `railway.json` |
 | PaaS previsto | Railway + Neon (`docs/IMPLEMENTACION.md:156-163`). Start command documentado: `streamlit run app.py --server.port=$PORT --server.address=0.0.0.0`. Se configura en el panel de Railway; `railpack-plan.json` sólo fija Python 3.11 |
 | TLS | Streamlit sirve HTTP plano. En PaaS el TLS lo termina la plataforma. Hacia Neon depende de `sslmode=require` en la URL |
@@ -567,7 +569,7 @@ Hoy es **mono-instancia**. Para escalar horizontalmente hacen falta tres cosas:
 
 | ID | Hallazgo | Referencia | Sev. |
 |---|---|---|---|
-| S-01 | **[CORREGIDO]** PostgreSQL estaba publicado en todas las interfaces con contraseña trivial versionada. Ahora el puerto queda en `127.0.0.1` y las credenciales vienen de `.env`; el default que queda en el archivo es sólo para desarrollo local. Persiste el superusuario: ver S-02 | `docker-compose.yml` | ~~ALTA~~ BAJA |
+| S-01 | **[CORREGIDO]** PostgreSQL estaba publicado en todas las interfaces con contraseña trivial versionada. Ahora el puerto queda en `127.0.0.1` y el desarrollo local usa `trust`, sin contraseñas en el repositorio. La seguridad descansa en el aislamiento de loopback: si se publica en red debe cambiarse a `scram-sha-256` | `docker-compose.yml` | ~~ALTA~~ BAJA (local) |
 | S-02 | La app se conecta como superusuario; no existe un rol de aplicación con mínimo privilegio | `docker-compose.yml:7`, `DATABASE_URL` | **ALTA** |
 | S-03 | Autenticación temporal: contraseña única compartida, sin usuarios, roles, bloqueo por intentos, expiración ni bitácora. El logout sólo cambia un flag | `app.py:166-216, 328-330` | **ALTA** (producción) |
 | S-04 | **[MITIGADO]** Con `LINCE_AUTH_ENABLED=false` la app quedaba abierta a la LAN. Ahora `server.address=127.0.0.1` por defecto (verificado: no responde desde la IP de red). Desactivar el login sigue siendo riesgoso si se expone con `0.0.0.0` | `app.py:174`, `.streamlit/config.toml` | MEDIA |

@@ -94,7 +94,7 @@ serviphar_grc_lite/
 Guía completa y verificada (requisitos, verificación y problemas frecuentes): [`docs/AUDITORIA_ESTADO_PROYECTO.md` §5](docs/AUDITORIA_ESTADO_PROYECTO.md#5-montaje-del-entorno-de-desarrollo).
 
 ```bash
-cp .env.example .env              # POSTGRES_PASSWORD, la misma clave en DATABASE_URL, y LINCE_ACCESS_PASSWORD
+cp .env.example .env              # desarrollo local sin claves: no hay que editar nada
 docker compose up -d              # PostgreSQL 16 local (sólo 127.0.0.1)
 python3.11 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
