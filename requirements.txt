@@ -1,5 +1,9 @@
 streamlit==1.32.0
-pandas>=2.1.2
+pandas==2.3.3
+# streamlit 1.32 exige numpy<2; pyarrow>=18 sin fijar trae builds que exigen numpy>=2
+# y rompen st.dataframe ("pyarrow requires NumPy 2.0 or newer").
+numpy==1.26.4
+pyarrow==17.0.0
 psycopg2-binary==2.9.9
 openpyxl==3.1.2
 python-docx==1.1.2

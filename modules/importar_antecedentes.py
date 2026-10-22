@@ -119,7 +119,7 @@ def _tab_nueva_importacion() -> None:
         st.warning("⚠️ No hay empresas registradas. Regístrelas primero en el módulo 🏢 Empresas.")
         return
 
-    opciones_emp = {r["nombre"]: int(r["id"]) for _, r in df_emp.iterrows()}
+    opciones_emp = {f'{r["nombre"]} ({r["rut"]})': int(r["id"]) for _, r in df_emp.iterrows()}
     nombres_emp = list(opciones_emp.keys())
     ids_emp = list(opciones_emp.values())
 
@@ -335,7 +335,7 @@ def _tab_nueva_importacion() -> None:
                 )
                 if imp_id_act:
                     st.session_state["_imp_reabierta_mapeo"] = mapeo_guardar
-                    st.success(f"✅ Mapeo y configuración de la Importación #{imp_id_act} guardados en Neon.")
+                    st.success(f"✅ Mapeo y configuración de la Importación #{imp_id_act} guardados en la base de datos.")
                 else:
                     st.error(f"⛔ Error al actualizar importación: {msg_act}")
 
@@ -1164,7 +1164,7 @@ def _render_boton_guardar_importacion_rat(
 ) -> None:
     """
     Renderiza el botón '💾 Guardar importación RAT' inmediatamente después del mapeo y referencia activa.
-    Persiste metadatos, matriz extraída y mapeo en Neon sin requerir generar candidatos previamente.
+    Persiste metadatos, matriz extraída y mapeo en la base de datos sin requerir generar candidatos previamente.
     """
     empresa_contexto_id = (
         (meta_importacion.get("empresa_id") if meta_importacion else None)
@@ -1180,7 +1180,7 @@ def _render_boton_guardar_importacion_rat(
         "💾 Guardar importación RAT",
         key=f"guardar_importacion_rat_{hash_archivo}",
         type="primary",
-        help="Guarda metadatos, previsualización y mapeo en Neon para poder reabrirlos sin subir el archivo nuevamente.",
+        help="Guarda metadatos, previsualización y mapeo en la base de datos para poder reabrirlos sin subir el archivo nuevamente.",
     )
 
     if guardar_importacion_click:
@@ -1200,6 +1200,14 @@ def _render_boton_guardar_importacion_rat(
             for i in range(len(encabezados))
         }
         filas_a_guardar = filas_datos[:200] if len(filas_datos) > 200 else filas_datos
+        # Minimización: sin opt-in, las columnas no mapeadas se persisten vacías
+        # (se conserva la estructura de columnas para reabrir el mapeo).
+        if not st.session_state.get(f"opt_adicionales_{hash_archivo}", False):
+            columnas_mapeadas = {i for i in range(len(encabezados)) if mapeo.get(i)}
+            filas_a_guardar = [
+                [celda if idx in columnas_mapeadas else "" for idx, celda in enumerate(fila)]
+                for fila in filas_a_guardar
+            ]
         total_utiles = total_filas
 
         with st.spinner("Guardando importación RAT en la bandeja persistente…"):
@@ -1302,7 +1310,7 @@ def _tab_revisar_candidatos() -> None:
         st.info("No hay empresas registradas.")
         return
 
-    opciones_emp = {r["nombre"]: r["id"] for _, r in df_emp.iterrows()}
+    opciones_emp = {f'{r["nombre"]} ({r["rut"]})': r["id"] for _, r in df_emp.iterrows()}
     empresa_activa_id = st.session_state.get("empresa_activa_id")
     idx_default = 0
     if empresa_activa_id and empresa_activa_id in opciones_emp.values():
@@ -1358,7 +1366,7 @@ def _tab_revisar_candidatos() -> None:
     if not df_trat.empty:
         for _, r in df_trat.iterrows():
             opciones_trat[f"#{r['id']} — {r['nombre_tratamiento'][:55]}"] = int(r["id"])
-            # Indexación en memoria para detección de similitud O(1) sin N+1 a Neon
+            # Indexación en memoria para detección de similitud O(1) sin N+1 a la base de datos
             # Reproduce exactamente: LOWER(TRIM(nombre_tratamiento))
             nom_existente = str(r.get("nombre_tratamiento") or "").strip()
             if nom_existente:
@@ -1678,7 +1686,7 @@ def _tab_historial() -> None:
     df_emp = get_empresas_df()
     opciones_emp = {"(Todas las empresas)": None}
     if not df_emp.empty:
-        opciones_emp.update({r["nombre"]: r["id"] for _, r in df_emp.iterrows()})
+        opciones_emp.update({f'{r["nombre"]} ({r["rut"]})': r["id"] for _, r in df_emp.iterrows()})
 
     empresa_activa_id = st.session_state.get("empresa_activa_id")
     idx_default_hist = 0

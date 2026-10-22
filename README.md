@@ -2,10 +2,19 @@
 
 **Gobierno, Riesgo y Cumplimiento**
 
-Plataforma integral para gestionar gobierno, riesgos, cumplimiento, evidencias y acciones de mejora.
+**Plataforma integral de cumplimiento e implementación de protección de datos personales en Chile.**
 
-La implementación de los requerimientos para el **Modelo de Prevención de Infracciones (MPI)** bajo el **Decreto Supremo N° 662 del Ministerio de Hacienda** (Reglamentario del artículo 49 incorporado por la Ley N° 21.719 a la Ley N° 19.628 sobre Protección de la Vida Privada en Chile) constituye el foco normativo inicial de la plataforma, la cual está diseñada con una arquitectura modular y extensible a diversos dominios y marcos GRC, incluyendo:
-- Modelo de Prevención de Infracciones (MPI).
+> **¿Te incorporas al proyecto?** Empieza por [`docs/AUDITORIA_ESTADO_PROYECTO.md`](docs/AUDITORIA_ESTADO_PROYECTO.md): estructura, arquitectura, montaje del entorno, modelo de datos, IA, seguridad, estado real y hoja de ruta.
+
+Lince GRC integra en una sola plataforma el cumplimiento de:
+- la **Ley N° 19.628 modificada por la Ley N° 21.719** (régimen completo: principios, licitud, derechos de los titulares, deberes del responsable, seguridad, vulneraciones, evaluación de impacto, encargados, transferencias, sanciones y prevención de infracciones);
+- la **Ley N° 21.663, Marco de Ciberseguridad** (incidentes y reporte al CSIRT Nacional);
+- el **Decreto Supremo N° 662 del Ministerio de Hacienda**, que reglamenta los **Modelos de Prevención de Infracciones (MPI)** del artículo 49.
+
+El MPI es uno de los componentes de Lince, no su alcance: la plataforma acompaña la implementación y la gestión del cumplimiento de la ley completa, adopte o no la organización un MPI. Su arquitectura modular abarca:
+- Registro de actividades de tratamiento (RAT) y caracterización de datos.
+- Diagnóstico, evaluaciones y auditorías de cumplimiento.
+- Modelo de Prevención de Infracciones (MPI) y Delegado de Protección de Datos.
 - Privacidad y protección de datos personales.
 - Gestión de riesgos y controles.
 - Auditoría, hallazgos y planes de acción.
@@ -82,15 +91,15 @@ serviphar_grc_lite/
 
 ## Ejecución Local
 
-1. Asegurar dependencias instaladas:
-   ```bash
-   pip install -r requirements.txt
-   ```
-2. Configurar variable de entorno `DATABASE_URL`:
-   ```bash
-   export DATABASE_URL="postgresql://usuario:contraseña@host:5432/nombre_bd?sslmode=require"
-   ```
-3. Iniciar Streamlit:
-   ```bash
-   streamlit run app.py
-   ```
+Guía completa y verificada (requisitos, verificación y problemas frecuentes): [`docs/AUDITORIA_ESTADO_PROYECTO.md` §5](docs/AUDITORIA_ESTADO_PROYECTO.md#5-montaje-del-entorno-de-desarrollo).
+
+```bash
+cp .env.example .env              # POSTGRES_PASSWORD, la misma clave en DATABASE_URL, y LINCE_ACCESS_PASSWORD
+docker compose up -d              # PostgreSQL 16 local (sólo 127.0.0.1)
+python3.11 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+streamlit run app.py              # http://localhost:8501 (el esquema se crea al iniciar)
+python -m unittest discover -s tests -t .   # pruebas
+```
+
+Para una BD gestionada (Neon), usar su URL en `DATABASE_URL` con `?sslmode=require`.

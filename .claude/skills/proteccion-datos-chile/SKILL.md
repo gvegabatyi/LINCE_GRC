@@ -82,7 +82,7 @@ Para el programa de cumplimiento, delegado, certificación, Registro Nacional de
 
 ### Integración con Lince GRC
 
-Para mapear requisitos a módulos de Lince (RAT, perfil MPI, delegado, evidencias, visitas, catálogo normativo) y para las reglas del copiloto normativo, lee [`references/lince-grc-integracion.md`](references/lince-grc-integracion.md).
+Lince GRC es una plataforma integral de cumplimiento e implementación de protección de datos en Chile (Ley 19.628 modificada por la Ley 21.719, Ley 21.663 y DS 662). El MPI es uno de sus componentes, no su alcance. Para mapear requisitos a módulos de Lince, conocer la cobertura por ámbito legal y las reglas del copiloto normativo, lee [`references/lince-grc-integracion.md`](references/lince-grc-integracion.md).
 
 ## Guardrails Chile-específicos
 
@@ -111,6 +111,6 @@ Prioridad: (1) LeyChile/BCN y Diario Oficial; (2) Agencia de Protección de Dato
 
 No cites de memoria un número de artículo, plazo o sanción cuando la precisión pueda cambiar el resultado. Reabre la fuente oficial y verifica.
 
-## Origen y licencia
+## Mantenimiento
 
-Skill de dominio del equipo Lince GRC (licencia en `LICENSE`). Verificada, completada (DS 662, Ley 21.663, arts. 16/16 bis/48) y armonizada con Lince GRC por el equipo Serviphar/Lince, 2026.
+Skill de dominio del equipo de desarrollo de Lince GRC, verificada artículo por artículo contra el corpus oficial del proyecto. Licencia: ver `LICENSE`. Tras modificarla, sincronizar la copia del copiloto con `python addons/normativa/tools/sync_conocimiento.py`.

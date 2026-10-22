@@ -11,6 +11,21 @@ import psycopg2
 from db.connection import get_connection
 
 
+def _invalidar_cache_dependiente() -> None:
+    """
+    Invalida lecturas cacheadas que dependen de empresas: el nombre de la empresa
+    aparece en sus JOIN y el DELETE en cascada elimina sus filas.
+    Import perezoso para evitar dependencias circulares entre repositorios.
+    """
+    from db.repositories import importaciones, tratamientos
+
+    tratamientos.get_tratamientos_df.clear()
+    importaciones.get_importaciones_df.clear()
+    importaciones.get_importaciones_reabribles_df.clear()
+    importaciones.get_importacion_por_id.clear()
+    importaciones.get_candidatos_df.clear()
+
+
 # ==============================================================================
 # ESCRITURA (retornan tuple[bool, str])
 # ==============================================================================
@@ -75,6 +90,7 @@ def update_empresa(empresa_id: int, nombre: str, rut: str, direccion: str,
             )
         conn.commit()
         get_empresas_df.clear()
+        _invalidar_cache_dependiente()
         return True, "Empresa actualizada exitosamente."
     except Exception as exc:
         if conn:
@@ -93,6 +109,7 @@ def delete_empresa(empresa_id: int) -> tuple[bool, str]:
             c.execute("DELETE FROM empresas WHERE id=%s", (empresa_id,))
         conn.commit()
         get_empresas_df.clear()
+        _invalidar_cache_dependiente()
         return True, "Empresa y registros asociados eliminados."
     except Exception as exc:
         if conn:

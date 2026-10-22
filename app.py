@@ -292,6 +292,7 @@ OPCIONES_MENU = [
     "⌖ Visitas / Auditorías",
     "◫ Evidencias",
     "⇲ Exportar Informe",
+    "§ Normativa",
 ]
 
 def _normalizar_opcion_menu(opcion: str) -> str:
@@ -329,7 +330,8 @@ if auth_env_actual not in ("false", "0"):
         st.rerun()
 
 st.sidebar.caption(
-    "◈ **Control Local:** Base de datos PostgreSQL en Docker activa y sincronizada en tiempo real."
+    # Si la ejecución llega aquí, init_db() y la lectura de empresas ya respondieron.
+    "◈ **Base de datos:** conectada · esquema verificado al iniciar el servidor."
 )
 
 # ==============================================================================
@@ -353,3 +355,11 @@ elif "Evidencias" in menu_opcion:
     evidencias.render()
 elif "Exportar" in menu_opcion:
     exportar.render()
+elif "Normativa" in menu_opcion:
+    # Addon opcional: un fallo al cargarlo no debe afectar al resto de Lince
+    try:
+        from addons.normativa import ui as normativa_ui
+    except Exception:
+        st.error("El addon normativo no está disponible en esta instalación.")
+    else:
+        normativa_ui.render()

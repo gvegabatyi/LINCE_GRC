@@ -1,16 +1,24 @@
+# PostgreSQL local para desarrollo de Lince GRC.
+# Credenciales desde .env (ver .env.example). El default de la contraseña es SÓLO
+# para desarrollo local: el puerto se publica únicamente en loopback (127.0.0.1).
 services:
   postgres:
     image: postgres:16-alpine
     container_name: lince-postgres
-    restart: always
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
-      POSTGRES_DB: lince_grc
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgrespassword}
+      POSTGRES_DB: ${POSTGRES_DB:-lince_grc}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - lince_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   lince_pgdata:

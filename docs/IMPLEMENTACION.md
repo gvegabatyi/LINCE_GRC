@@ -17,9 +17,12 @@
 ---
 
 ## Resumen del Proyecto
-**Lince GRC** es una plataforma integral para gestionar gobierno, riesgos, cumplimiento, evidencias y acciones de mejora.
+**Lince GRC** es una **plataforma integral de cumplimiento e implementación de protección de datos personales en Chile**. Cubre:
+- la Ley N° 19.628 modificada por la Ley N° 21.719, en su régimen completo;
+- la Ley N° 21.663, Marco de Ciberseguridad;
+- el Decreto Supremo N° 662 del Ministerio de Hacienda, que reglamenta los Modelos de Prevención de Infracciones (MPI) del artículo 49 de la Ley N° 19.628, incorporado por la Ley N° 21.719.
 
-La implementación de los requerimientos para el **Modelo de Prevención de Infracciones (MPI)** bajo el **Decreto Supremo N° 662 del Ministerio de Hacienda** (Reglamento del artículo 49 de la Ley N° 19.628, incorporado por la Ley N° 21.719) constituye el foco normativo inicial y prioritario de la plataforma, extensible a otros marcos de cumplimiento y gestión de riesgos.
+El MPI es un componente de la plataforma, no su alcance. La cobertura por ámbito legal y las brechas de producto están en `.claude/skills/proteccion-datos-chile/references/lince-grc-integracion.md`.
 
 - **Repositorio:** [https://github.com/gvegabatyi/serviphar-grc-lite](https://github.com/gvegabatyi/serviphar-grc-lite)
 - **Despliegue PaaS:** Railway

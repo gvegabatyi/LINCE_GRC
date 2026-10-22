@@ -1,0 +1,3 @@
+# Dependencia opcional: sólo para LINCE_COPILOTO_PROVEEDOR=anthropic.
+# Las citas y el proveedor ollama no requieren paquetes adicionales.
+anthropic==2.1.0

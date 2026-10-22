@@ -159,9 +159,11 @@ def render() -> None:
             c5, c6 = st.columns(2)
             with c5:
                 entidad_cert = st.text_input(
-                    "Entidad Certificadora Acreditada (Art. 15)",
+                    "Organismo certificador (DS 662 arts. 14-15)",
                     value=perfil_actual["entidad_certificadora"] if perfil_actual and perfil_actual.get("entidad_certificadora") else "",
-                    placeholder="Obligatorio si está certificado o registrado",
+                    placeholder="Agencia de Protección de Datos Personales",
+                    help="Según el DS 662 sólo la Agencia certifica los modelos de prevención; "
+                         "puede contratar a terceros únicamente para revisar antecedentes.",
                 )
                 nro_cert = st.text_input(
                     "Número de Certificado Emitido (Art. 15)",

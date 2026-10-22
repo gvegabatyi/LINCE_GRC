@@ -572,8 +572,9 @@ def _sanitizar_matriz(filas: list[list]) -> list[list]:
     """
     Convierte todos los valores de la matriz a strings seguros para JSONB.
     NaN, None, pd.NA, fechas y objetos no serializables se convierten a ''.
+    Cada celda se limita a 4.000 caracteres (mismo límite que los candidatos).
     """
-    return [[_sanitizar_valor(celda) for celda in fila] for fila in filas]
+    return [[_sanitizar_valor(celda)[:4000] for celda in fila] for fila in filas]
 
 
 def _sanitizar_encabezados(encabezados: list) -> list[str]:

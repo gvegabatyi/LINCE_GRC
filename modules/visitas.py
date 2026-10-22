@@ -59,10 +59,20 @@ def render() -> None:
     with tab_crear:
         st.subheader("Formulario de Auditoría en Terreno")
 
+        # Fuera del form: al cambiar de empresa deben recalcularse sus evaluaciones
+        activa = st.session_state.get("empresa_activa_id")
+        ids_empresas = list(empresa_map.values())
+        vis_empresa_key = st.selectbox(
+            "Empresa Auditada *",
+            list(empresa_map.keys()),
+            index=ids_empresas.index(activa) if activa in ids_empresas else 0,
+            key="vis_crear_emp",
+        )
+        eid_seleccionado = empresa_map[vis_empresa_key]
+        eval_ops = _build_eval_options(eid_seleccionado)
+
         with st.form("form_nueva_visita"):
-            col_v1, col_v2, col_v3 = st.columns(3)
-            with col_v1:
-                vis_empresa_key = st.selectbox("Empresa Auditada *", list(empresa_map.keys()))
+            col_v2, col_v3 = st.columns(2)
             with col_v2:
                 vis_fecha = st.date_input("Fecha de Visita *", value=date.today())
             with col_v3:
@@ -70,8 +80,6 @@ def render() -> None:
 
             col_ev, col_tv = st.columns(2)
             with col_ev:
-                eid_seleccionado = empresa_map[vis_empresa_key]
-                eval_ops = _build_eval_options(eid_seleccionado)
                 eval_key = st.selectbox("Evaluación GRC (recomendado para registros nuevos)", list(eval_ops.keys()))
                 evaluacion_id_form = eval_ops[eval_key]
             with col_tv:

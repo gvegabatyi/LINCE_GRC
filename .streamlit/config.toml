@@ -8,3 +8,12 @@ font = "sans serif"
 
 [server]
 headless = true
+# Sólo loopback por defecto. En PaaS el start command pasa --server.address 0.0.0.0
+address = "127.0.0.1"
+# MB por archivo; coincide con el límite de la app (services/deduplicacion_service.py)
+maxUploadSize = 10
+enableXsrfProtection = true
+
+[client]
+# No mostrar trazas internas al usuario (pueden revelar host, SQL o rutas)
+showErrorDetails = false

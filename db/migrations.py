@@ -19,6 +19,11 @@ import streamlit as st
 from db.connection import get_connection
 
 
+def _log(mensaje: str) -> None:
+    """Log a stdout seguro ante cualquier codificación de consola (p. ej. cp1252 en Windows)."""
+    print(mensaje.encode("ascii", "backslashreplace").decode("ascii"), flush=True)
+
+
 def _tabla_existe(cursor, table_name: str) -> bool:
     """Verifica si una tabla existe en el schema 'public'."""
     cursor.execute(
@@ -47,6 +52,73 @@ def _columna_existe(cursor, table_name: str, column_name: str) -> bool:
         (table_name, column_name),
     )
     return cursor.fetchone()[0]
+
+
+def _fk_existe(cursor, table_name: str, column_name: str) -> bool:
+    """True si la columna ya participa en alguna FOREIGN KEY (con cualquier nombre)."""
+    cursor.execute(
+        """
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+              ON tc.constraint_name = kcu.constraint_name
+             AND tc.table_schema = kcu.table_schema
+            WHERE tc.constraint_type = 'FOREIGN KEY'
+              AND tc.table_schema = 'public'
+              AND tc.table_name = %s
+              AND kcu.column_name = %s
+        )
+        """,
+        (table_name, column_name),
+    )
+    return cursor.fetchone()[0]
+
+
+# FK declaradas en los ALTER de Fase 1 que nunca se crean en instalaciones nuevas:
+# la columna ya existe desde el CREATE TABLE y ADD COLUMN IF NOT EXISTS se omite completo.
+# (tabla, columna, tabla_referenciada)
+_FK_CORRECTIVAS = [
+    ("tratamientos", "evaluacion_id", "evaluaciones"),
+    ("tratamientos", "evidencia_id", "evidencias"),
+    ("visitas", "evaluacion_id", "evaluaciones"),
+    ("evidencias", "evaluacion_id", "evaluaciones"),
+]
+
+
+def _aplicar_paso_8(cursor) -> None:
+    """
+    PASO 8 (correctivo): integridad referencial y longitud de campos RAT.
+    Idempotente: sólo actúa si la FK no existe o la columna sigue siendo VARCHAR.
+    Las referencias colgantes se ponen en NULL antes de crear la FK, que es el
+    mismo efecto que ON DELETE SET NULL habría producido.
+    """
+    for tabla, columna, referida in _FK_CORRECTIVAS:
+        if _fk_existe(cursor, tabla, columna):
+            continue
+        cursor.execute(
+            f"UPDATE {tabla} t SET {columna} = NULL "
+            f"WHERE t.{columna} IS NOT NULL "
+            f"AND NOT EXISTS (SELECT 1 FROM {referida} r WHERE r.id = t.{columna})"
+        )
+        if cursor.rowcount:
+            _log(f"[migrations] Paso 8: {cursor.rowcount} referencias colgantes en {tabla}.{columna} -> NULL")
+        cursor.execute(
+            f"ALTER TABLE {tabla} ADD CONSTRAINT fk_{tabla}_{columna} "
+            f"FOREIGN KEY ({columna}) REFERENCES {referida}(id) ON DELETE SET NULL"
+        )
+
+    # La importación admite hasta 4.000 caracteres por campo; VARCHAR(255) hacía fallar el INSERT.
+    cursor.execute(
+        """
+        SELECT data_type FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'tratamientos'
+          AND column_name = 'rat_ambito_territorial'
+        """
+    )
+    fila = cursor.fetchone()
+    if fila and fila[0] == "character varying":
+        cursor.execute("ALTER TABLE tratamientos ALTER COLUMN rat_ambito_territorial TYPE TEXT")
 
 
 def init_db() -> None:
@@ -382,7 +454,7 @@ def init_db() -> None:
         # Columnas opcionales — idempotentes — no destructivas
         # Permiten restaurar previsualización, mapeo y metadatos sin archivo
         # ==================================================================
-        print("[migrations] Aplicando Paso 7: persistencia de importaciones RAT...")
+        _log("[migrations] Aplicando Paso 7: persistencia de importaciones RAT...")
         try:
             with conn.cursor() as c_p7:
                 c_p7.execute("""
@@ -409,14 +481,28 @@ def init_db() -> None:
                     ALTER TABLE importaciones_documentales
                     ADD COLUMN IF NOT EXISTS total_filas_utiles INTEGER DEFAULT 0;
                 """)
-            print("[migrations] Paso 7 completado correctamente.")
+            _log("[migrations] Paso 7 completado correctamente.")
         except Exception as exc:
             raise RuntimeError(
                 f"Error en migración Paso 7 (persistencia importaciones RAT): "
                 f"[{type(exc).__name__}: {exc}]"
             ) from exc
 
-        # Confirmar toda la transacción de migración (Fase 1, 2A, 2A.2 y 2A.3)
+        # ==================================================================
+        # PASO 8 (correctivo): FK faltantes en instalaciones nuevas y
+        # rat_ambito_territorial VARCHAR(255) → TEXT
+        # ==================================================================
+        try:
+            with conn.cursor() as c_p8:
+                _aplicar_paso_8(c_p8)
+        except Exception as exc:
+            _log(f"[migrations] Error en Paso 8: {type(exc).__name__}: {exc}")
+            raise RuntimeError(
+                f"Error en migración Paso 8 (integridad referencial) [{type(exc).__name__}]. "
+                "Revise el log del servidor."
+            ) from exc
+
+        # Confirmar toda la transacción de migración (Fase 1, 2A, 2A.2, 2A.3 y Paso 8)
         conn.commit()
 
     except RuntimeError as exc:

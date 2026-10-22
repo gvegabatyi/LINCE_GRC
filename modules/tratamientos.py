@@ -47,6 +47,13 @@ def _build_evidencia_options(empresa_id: int) -> dict:
     return opciones
 
 
+def _indice_empresa_activa(empresa_map: dict) -> int:
+    """Posición de la empresa activa de la sesión en el selector (0 si no hay)."""
+    activa = st.session_state.get("empresa_activa_id")
+    ids = list(empresa_map.values())
+    return ids.index(activa) if activa in ids else 0
+
+
 def render() -> None:
     st.header("📋 Registro de Actividades de Tratamiento (RAT)")
     st.caption("Estructura conforme al **Art. 3 letra d), numerales i a xi del Decreto N° 662** (Ministerio de Hacienda)")
@@ -67,11 +74,19 @@ def render() -> None:
     # ==========================================================================
     with tab_crear:
         st.subheader("Nuevo Registro de Actividad de Tratamiento (Art. 3 letra d)")
+        # Fuera del form: al cambiar de empresa deben recalcularse evaluaciones y evidencias
+        empresa_keys = list(empresa_map.keys())
+        empresa_key = st.selectbox(
+            "Empresa Responsable *",
+            empresa_keys,
+            index=_indice_empresa_activa(empresa_map),
+            key="rat_crear_emp",
+        )
+        eid_form = empresa_map[empresa_key]
+        eval_ops = _build_eval_options(eid_form)
+        evidencias_ops = _build_evidencia_options(eid_form)
+
         with st.form("form_crear_tratamiento", clear_on_submit=True):
-            empresa_key = st.selectbox("Empresa Responsable *", list(empresa_map.keys()), key="rat_crear_emp")
-            eid_form = empresa_map[empresa_key]
-            eval_ops = _build_eval_options(eid_form)
-            evidencias_ops = _build_evidencia_options(eid_form)
 
             st.markdown("---")
             st.markdown("### 📌 CAMPOS OBLIGATORIOS DEL ART. 3 LETRA d) (Numerales i al xi)")

@@ -6,7 +6,8 @@ Soporta: XLSX, CSV, DOCX, PDF (con texto), MD, TXT.
 
 Principios:
 - Sin IA externa, sin OCR, sin inferencia automática de campos.
-- No almacena el contenido original en Neon ni Railway.
+- No almacena el archivo original. La importación guarda en la base de datos sólo las
+  columnas mapeadas (las demás vacías, salvo opt-in), con celdas truncadas a 4.000 caracteres.
 - Toda información extraída es un borrador no validado.
 - Los datos definitivos solo se persisten por acción humana explícita.
 - Límites de privacidad: máx. 4.000 caracteres por campo (truncamiento explícito con advertencia).
@@ -151,7 +152,7 @@ def generar_candidatos_xlsx(
     contenido: bytes,
     nombre_hoja: str,
     mapeo_columnas: dict,
-    fila_inicio: int = 1,
+    fila_inicio: int = 0,  # índice sobre las filas de datos (el encabezado ya está excluido)
     limite: int = MAX_CANDIDATOS_POR_VISTA,
     conservar_adicionales: bool = False,
 ) -> tuple[list[dict], int, int]:

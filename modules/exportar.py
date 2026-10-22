@@ -407,9 +407,23 @@ def generar_excel_completo() -> bytes:
     except Exception:
         pass
 
+    _neutralizar_formulas(wb)
     buffer = io.BytesIO()
     wb.save(buffer)
     return buffer.getvalue()
+
+
+def _neutralizar_formulas(wb) -> None:
+    """
+    Evita la inyección de fórmulas (CSV/Excel injection): el informe no usa
+    fórmulas propias, así que todo texto que openpyxl interpretó como fórmula
+    (empieza con '=') proviene de datos del usuario y se fuerza a texto literal.
+    """
+    for ws in wb.worksheets:
+        for fila in ws.iter_rows():
+            for celda in fila:
+                if celda.data_type == "f":
+                    celda.data_type = "s"
 
 
 # ==============================================================================
