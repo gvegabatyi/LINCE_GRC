@@ -1,0 +1,7 @@
+# Documentos binarios: nunca convertir finales de línea ni hacer diff de texto.
+# Crítico para addons/normativa/fuentes/: las fuentes legales deben conservar su SHA-256.
+*.pdf   binary
+*.docx  binary
+*.xlsx  binary
+*.png   binary
+*.jpg   binary
