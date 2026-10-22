@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Fecha de corte** | 2026-10-22 |
-| **Base auditada** | rama `main`, commit `18a9a04` más la entrega del 2026-10-22: addon normativo, tests, `.env.example`, definición del producto y **correcciones derivadas de esta auditoría** (ver [Registro de correcciones](#registro-de-correcciones-2026-10-22)) |
+| **Base auditada** | rama `main` al cierre del 2026-10-22 (último commit de esa fecha en `git log`). Incluye la auditoría inicial sobre `18a9a04` y todo lo construido después: addon normativo, correcciones, derechos de los titulares, análisis de riesgos y EIPD, limpieza visual y entorno local sin claves (ver [Registro de correcciones](#registro-de-correcciones-2026-10-22)) |
 | **Método** | revisión estática completa del código (≈11.000 líneas), sin conexión a la BD de ningún entorno. Cada hallazgo lleva su referencia `archivo:línea`. Los hallazgos críticos se reverificaron a mano |
 | **Destinatario** | ingeniería de infraestructura e IA que se incorpora al proyecto |
 | **Severidad** | **ALTA**: bloquea producción o expone datos · **MEDIA**: degrada operación, consistencia o seguridad · **BAJA**: deuda o higiene |
@@ -32,6 +32,8 @@ La migración se probó además sobre una copia de una base existente y con refe
 | S-04 / S-07 / S-12 | `.streamlit/config.toml`: `address=127.0.0.1`, `maxUploadSize=10`, `showErrorDetails=false` | Sondeo del servidor real (no responde desde la IP de red) |
 | S-08 | Exportación XLSX: neutralización de fórmulas | `TestExportacion` |
 | MVP-6 | **Módulo Derechos de los Titulares** (tabla `solicitudes_derechos`, PASO 9): plazos por régimen según la fecha de ingreso (estándar dual Ley 19.628 / Ley 21.719), prórroga única, bloqueo temporal, denegación fundada, respaldo de respuesta, aislamiento por empresa. Integración con Dashboard y exportación (hoja 13, minimizada) | `tests/test_derechos.py` (16) + recorrido en la app real |
+| RSG | **Módulo Análisis de Riesgos** (tablas `riesgos` y `eipd`, PASO 10): diagnóstico automático a partir de los datos de Lince (RAT, auditorías, derechos) con riesgos asociados a infracciones de la Ley 21.719; evaluación probabilidad × impacto con residual y plan de acción; mapa de calor; matriz del MPI (DS 662 art. 3 e); EIPD por tratamiento (art. 15 ter) | `tests/test_riesgos.py` (13) + recorrido en la app real |
+| UI-2 | **Limpieza visual técnica:** se eliminaron 183 íconos gestuales de la interfaz y se reemplazaron 3 que se muestran como emoji (▶ por ▸). Se conservan los símbolos geométricos del menú, los títulos de módulo van en texto plano y las subsecciones usan ▸ | Recorrido de las 12 páginas |
 | UI | El Dashboard ya no muestra el indicador de "completitud documental MPI", que presentaba el MPI como si fuera el alcance de Lince. Se corrigieron los textos que afirmaban que lo importado no cuenta para ese indicador (era falso, D-05) | Recorrido en la app real |
 | Fuentes | Las fuentes legales oficiales (PDF de LeyChile y DOCX del DS 662) quedan versionadas en `addons/normativa/fuentes/` con su SHA-256. El corpus regenerado desde ellas es idéntico al publicado | Regeneración + comparación |
 | — | Invalidación de cachés dependientes al editar o borrar una empresa; textos de la UI que afirmaban "Neon" o un estado de BD sin comprobarlo; `pandas` fijado; `.gitignore` ampliado; `AGENTS.md` alineado con el código | Revisión de código + suite de tests |
@@ -83,11 +85,11 @@ La migración se probó además sobre una copia de una base existente y con refe
 
 | Dimensión | Estado | Comentario |
 |---|---|---|
-| Madurez funcional | **Prototipo funcional avanzado (Fase 2A)** | RAT de 11 numerales, importación documental, MPI y delegado, evaluaciones, visitas, evidencias, exportación y addon normativo |
-| Cobertura normativa | **Parcial** | 8 de 19 ámbitos legales cubiertos, 7 parciales y 4 no modelados (§13). Faltan vulneraciones, incidentes CSIRT, EIPD y exposición sancionatoria |
+| Madurez funcional | **Prototipo funcional avanzado** | RAT de 11 numerales, importación documental, derechos de los titulares con plazos legales, análisis de riesgos con matriz MPI y EIPD, MPI y delegado, evaluaciones, visitas, evidencias, exportación de 15 hojas y addon normativo con fuentes oficiales |
+| Cobertura normativa | **Parcial** | 8 de 19 ámbitos legales cubiertos, 8 parciales y 3 no modelados (§13). Faltan vulneraciones (art. 14 sexies), incidentes CSIRT (Ley 21.663) y usuarios, roles y bitácora |
 | Preparación para producción | **No apto** | Autenticación temporal de contraseña única, sin usuarios ni roles, sin bitácora, sin backups, la app se conecta como superusuario a la BD, sin contenedor de la app (§11) |
 | Integridad del esquema | **Mejorada** | FK faltantes y longitud de campo corregidas (PASO 8). Persiste: migraciones sin versionado y DDL en cada arranque (§7.4) |
-| Pruebas | **Básicas** | 47 tests: addon normativo, regresión de las correcciones, módulo de derechos e integración contra PostgreSQL efímero. Sin tests de UI ni de la mayoría de los repositorios. Sin CI |
+| Pruebas | **Básicas** | 60 tests: addon normativo, regresión de las correcciones, módulos de derechos y riesgos, e integración contra PostgreSQL efímero. Sin tests de UI ni de la mayoría de los repositorios. Sin CI |
 | IA en runtime | **Opcional y desactivada por defecto** | Copiloto RAG con salvaguardas de segregación (§9) |
 
 **Los cinco puntos de mayor riesgo vigentes** (tras las correcciones del 2026-10-22):
@@ -122,18 +124,21 @@ serviphar_grc_lite/
 │       ├── evidencias.py           # Evidencias como URL externa · sin cache
 │       ├── mpi_gobernanza.py       # Perfil MPI, delegado (versionados con 'activo'), catálogo normativo · cache 3600 s
 │       ├── importaciones.py        # Importaciones documentales y candidatos RAT · cache 15-30 s
-│       └── derechos.py             # Solicitudes de derechos de los titulares · cache 30 s · escrituras por id+empresa
+│       ├── derechos.py             # Solicitudes de derechos de los titulares · cache 30 s · escrituras por id+empresa
+│       └── riesgos.py              # Registro de riesgos y EIPD · cache 30 s · escrituras por id+empresa
 │
 ├── services/                       # LÓGICA DE NEGOCIO sin UI
 │   ├── extraccion_service.py       # Extracción determinista (sin IA ni OCR) desde XLSX/CSV/DOCX/PDF/MD/TXT
 │   ├── deduplicacion_service.py    # SHA-256, validación estructural de archivos, duplicados (contiene SQL: deuda)
 │   ├── plazos_service.py           # Plazos legales de derechos (régimen dual, días hábiles, feriados)
+│   ├── riesgos_service.py          # Diagnóstico de riesgos desde los datos, niveles, disparadores de EIPD
 │   ├── mpi_service.py              # Completitud documental MPI (no expuesto en la UI)
 │   └── checklist_service.py        # Puntaje del checklist de visitas
 │
 ├── modules/                        # CAPA DE PRESENTACIÓN Streamlit (no debe contener SQL)
 │   ├── dashboard.py · empresas.py · evaluaciones.py · mpi_gobernanza.py · tratamientos.py
 │   ├── derechos.py                 # Derechos de los titulares: bandeja, alta, gestión y base legal
+│   ├── riesgos.py                  # Análisis de riesgos: diagnóstico, registro, mapa de calor, matriz MPI, EIPD
 │   ├── importar_antecedentes.py    # Bandeja de importación RAT (1.746 líneas: candidato a refactor)
 │   └── visitas.py · evidencias.py · exportar.py
 │
@@ -153,7 +158,8 @@ serviphar_grc_lite/
 ├── tests/
 │   ├── test_addon_normativa.py     # 21 tests del addon (sin BD, red ni anthropic)
 │   ├── test_correcciones.py        # 10 tests: regresión + integración con PostgreSQL (LINCE_TEST_DATABASE_URL)
-│   └── test_derechos.py            # 16 tests: plazos y estándar dual + integración del repositorio
+│   ├── test_derechos.py            # 16 tests: plazos y estándar dual + integración del repositorio
+│   └── test_riesgos.py             # 13 tests: niveles, reglas de diagnóstico, EIPD + integración
 │
 ├── docs/
 │   ├── IMPLEMENTACION.md           # Documentación funcional histórica (Fases 1-2A)
@@ -197,7 +203,7 @@ Navegador ──HTTP/WebSocket──► Streamlit server (1 proceso Python)
                                   ├─ login temporal (hmac.compare_digest)   app.py:168-216
                                   ├─ init_db()  @st.cache_resource          app.py:226-237  (1 vez por PROCESO)
                                   ├─ empresa activa en st.session_state     app.py:251-261
-                                  ├─ menú (11 opciones) → módulo.render()   app.py:285-364
+                                  ├─ menú (12 opciones) → módulo.render()   app.py:285-364
                                   │      └─ repositorio → psycopg2.connect() por llamada (sin pool)
                                   └─ addon normativa (import perezoso, try/except)
 ```
@@ -251,10 +257,10 @@ streamlit run app.py
 | Comprobación | Comando o acción | Resultado esperado |
 |---|---|---|
 | Servidor vivo | `curl -s localhost:8501/_stcore/health` | `ok` |
-| Esquema creado | Abrir la app e iniciar sesión. `init_db()` crea el esquema en el primer rerun | 12 tablas en `lince_grc` (`\dt` en psql) |
+| Esquema creado | Abrir la app e iniciar sesión. `init_db()` crea el esquema en el primer rerun | 14 tablas en `lince_grc` (`\dt` en psql) |
 | Seeds | `SELECT count(*) FROM normativa_referencias;` | 21 |
-| Tests | `python -m unittest discover -s tests -t .` | `Ran 47 tests ... OK (skipped=9)`. Los 9 omitidos son de integración |
-| Tests de integración | Con una BD **desechable**: `LINCE_TEST_DATABASE_URL=postgresql://... python -m unittest discover -s tests -t .` (ejemplo de contenedor en `tests/test_correcciones.py`) | `Ran 47 tests ... OK` |
+| Tests | `python -m unittest discover -s tests -t .` | `Ran 60 tests ... OK (skipped=13)`. Los 13 omitidos son de integración |
+| Tests de integración | Con una BD **desechable**: `LINCE_TEST_DATABASE_URL=postgresql://... python -m unittest discover -s tests -t .` (ejemplo de contenedor en `tests/test_correcciones.py`) | `Ran 60 tests ... OK` |
 | Addon | Menú **§ Normativa** → Consultar artículo → Ley 21.719, "14 sexies" | Texto literal del artículo |
 
 ### 5.4 Problemas frecuentes
@@ -304,7 +310,7 @@ Todas las variables que lee el código:
 
 ### 7.1 Tablas
 
-`init_db()` crea 12 tablas en una sola transacción.
+`init_db()` crea 14 tablas en una sola transacción.
 
 | Tabla | Creada en | Propósito | Claves relevantes |
 |---|---|---|---|
@@ -319,6 +325,8 @@ Todas las variables que lee el código:
 | `mpi_delegados` | PASO 4 | Delegado de protección de datos, versionado con `activo` | UNIQUE parcial `(empresa_id) WHERE activo` |
 | `importaciones_documentales` | PASO 6 + PASO 7 | Importación: metadatos, hash, matriz JSONB | índices `(empresa_id)`, `(empresa_id, hash_sha256)`, **no UNIQUE** |
 | `importacion_tratamientos_candidatos` | PASO 6 | Candidatos RAT para revisión humana | índices `(empresa_id, estado_revision)`, `(importacion_id)` |
+| `eipd` | PASO 10 | Evaluación de impacto por tratamiento (art. 15 ter): disparadores a-d, contenido mínimo, conclusión, consulta a la Agencia | `empresa_id` FK CASCADE; `tratamiento_id` FK SET NULL |
+| `riesgos` | PASO 10 | Registro de riesgos: origen (diagnóstico o manual), infracción asociada y gravedad legal, probabilidad × impacto, residual, plan de acción | `empresa_id` FK CASCADE; **CHECK** de escala 1-5; UNIQUE parcial `(empresa_id, codigo_regla, COALESCE(tratamiento_id,0))` para no duplicar propuestas |
 | `solicitudes_derechos` | PASO 9 | Solicitudes de derechos de los titulares: derecho, régimen, plazos, prórroga, bloqueo, respuesta | `empresa_id` FK CASCADE; UNIQUE `(empresa_id, folio)`; índices `(empresa_id, estado)`, `(fecha_vencimiento)` |
 
 No hay restricciones CHECK: los estados son VARCHAR libres validados sólo en la UI.
@@ -389,6 +397,7 @@ El dato obsoleto dura como máximo un TTL.
 |---|---|---|---|
 | Dashboard | `modules/dashboard.py` | KPIs globales y alertas de plazos de derechos (todas las empresas) | No (lecturas globales) |
 | Empresas | `modules/empresas.py` | CRUD; **fija** `empresa_activa_id` | Es la fuente |
+| Análisis de Riesgos | `modules/riesgos.py` | Diagnóstico, registro, evaluación, mapa de calor, matriz MPI y EIPD | Sí (la lee y la fija) |
 | Derechos de los Titulares | `modules/derechos.py` | Bandeja con semáforo de plazos, alta, gestión (acuse, prórroga, bloqueo, respuesta) y base legal | Sí (la lee y la fija) |
 | Evaluaciones GRC | `modules/evaluaciones.py` | Contenedor de proyecto (estado, avance, alcance) | No (selector propio) |
 | Perfil MPI y Delegado | `modules/mpi_gobernanza.py` | DS 662 art. 3 a)-c) y arts. 6-13; catálogo normativo | No (selector propio) |
@@ -396,7 +405,7 @@ El dato obsoleto dura como máximo un TTL.
 | Importar Antecedentes RAT | `modules/importar_antecedentes.py` | Bandeja documental: carga, mapeo, candidatos y conciliación | Sí (la lee y la reescribe) |
 | Visitas / Auditorías | `modules/visitas.py` | Visita en terreno con checklist de 15 preguntas | No |
 | Evidencias | `modules/evidencias.py` | Evidencia como URL, ligada a una visita | No |
-| Exportar Informe | `modules/exportar.py` | XLSX de 13 hojas, en memoria | No (**exporta todas las empresas**) |
+| Exportar Informe | `modules/exportar.py` | XLSX de 15 hojas, en memoria | No (**exporta todas las empresas**) |
 | § Normativa | `addons/normativa/ui.py` | Citas, búsqueda y copiloto | No aplica (sin BD) |
 
 La regla de AGENTS.md "sincronizar siempre con `empresa_activa_id`" se cumple en la importación. En Tratamientos y Visitas el selector se preselecciona con la empresa activa, y está **fuera** del `st.form`, de modo que evaluaciones y evidencias se recalculan al cambiarlo **[CORREGIDO D-06]**. Dashboard, Evaluaciones, Perfil MPI, Evidencias y Exportar mantienen selectores propios o lecturas globales.
@@ -434,7 +443,7 @@ El 100% sólo se alcanza si se cumplen todos los requisitos. En cualquier otro c
 
 ### 8.4 Exportación
 
-XLSX con openpyxl generado en memoria (`modules/exportar.py`), con 13 hojas: empresas, tratamientos, visitas, evidencias, resumen, evaluaciones, perfil MPI, delegado, RAT DS 662, referencias normativas, importaciones y candidatos y solicitudes de derechos (sin datos del titular).
+XLSX con openpyxl generado en memoria (`modules/exportar.py`), con 15 hojas: empresas, tratamientos, visitas, evidencias, resumen, evaluaciones, perfil MPI, delegado, RAT DS 662, referencias normativas, importaciones y candidatos y solicitudes de derechos (sin datos del titular), riesgos y EIPD.
 - Las hojas 6 a 12 están envueltas en `except Exception: pass`: si fallan, se omiten sin aviso.
 - **[CORREGIDO S-08]** `_neutralizar_formulas()` fuerza a texto toda celda que openpyxl interpretó como fórmula. El informe no usa fórmulas propias, así que cualquier celda de ese tipo proviene de datos del usuario.
 
@@ -453,6 +462,42 @@ XLSX con openpyxl generado en memoria (`modules/exportar.py`), con 13 hojas: emp
 - **Flujo:** recibida → en análisis (acuse) → [prórroga] → acogida, acogida parcial, denegada o cerrada. La denegación total o parcial exige fundamento. La respuesta se vincula a una evidencia, porque el art. 11 obliga a guardar respaldo de la remisión.
 - **Seguridad:** toda escritura filtra por `id` **y** `empresa_id`, cerrando para este módulo el patrón S-06.
 - **Minimización:** del titular sólo se guarda lo necesario para identificarlo y responderle. La hoja 13 del Excel no incluye ni su nombre ni su contacto.
+
+### 8.6 Análisis de riesgos (`modules/riesgos.py`)
+
+El diagnóstico de riesgos se construye sobre los datos que Lince ya captura.
+
+**Diagnóstico automático** (`services/riesgos_service.py`): reglas que **proponen** riesgos asociados a infracciones de la Ley 21.719. La propuesta requiere aceptación humana para entrar al registro.
+
+| Regla | Dato de Lince | Infracción asociada |
+|---|---|---|
+| R-LIC | Tratamiento sin base de licitud | 34 ter a (grave) |
+| R-SEN | Datos sensibles o de salud | 34 quáter e (gravísima); indicio de EIPD (15 ter d) |
+| R-AUT | Decisiones automatizadas o perfilamiento | 34 quáter k (gravísima, omitir la EIPD) |
+| R-TRI | Transferencias internacionales | 34 ter m (grave) |
+| R-SUP | Sin plazo de conservación o supresión | 34 ter c (grave) |
+| R-ENC | Encargados o proveedores | 34 ter j (grave) |
+| R-TRA | Numerales del RAT incompletos | 34 bis a (leve) |
+| R-SEG | Respuestas "No" en la última auditoría | 34 ter j (grave) |
+| R-DER / R-BLQ | Solicitudes de derechos o bloqueos vencidos | 34 bis c (leve) / 34 ter f (grave) |
+
+**Evaluación:**
+- Probabilidad × impacto en escala 1-5, con una restricción CHECK en la BD.
+- Niveles: BAJO < 5 ≤ MEDIO < 10 ≤ ALTO < 15 ≤ CRÍTICO. Es un criterio metodológico interno y ajustable (`UMBRAL_*`).
+- El impacto sugerido sale de la gravedad legal: leve 2, grave 4, gravísima 5.
+- Se registran controles, riesgo residual, respuesta (mitigar, evitar, transferir o aceptar), plan de acción, responsable, plazo y evidencia.
+
+**Vistas:**
+- **Mapa de calor 5×5:** riesgo inherente o residual.
+- **Matriz del MPI (DS 662 art. 3 e):** riesgos agrupados por infracción y ordenados por gravedad legal.
+- **EIPD por tratamiento:**
+  - disparadores a-d: los literales a) y d) se detectan desde el RAT como indicios a confirmar; b) y c) se marcan a mano;
+  - contenido mínimo del art. 15 ter, obligatorio para aprobarla;
+  - conclusión y sugerencia de consulta a la Agencia si el riesgo residual es alto.
+
+**Integración:** el Dashboard muestra riesgos críticos y altos y las EIPD pendientes; la exportación agrega las hojas 14 (RIESGOS) y 15 (EIPD).
+
+**Seguridad:** escrituras por `id` + `empresa_id`. El registro de propuestas se hace en lote (una lectura de claves y una sola transacción), sin consultas por fila.
 
 ---
 
@@ -679,7 +724,8 @@ Discrepancias vigentes entre las reglas de `AGENTS.md` (objetivo) y el código:
 
 ### 12.5 Pruebas
 
-- **47 tests** (`python -m unittest discover -s tests -t .`):
+- **60 tests** (`python -m unittest discover -s tests -t .`):
+  - `tests/test_riesgos.py` (13): umbrales de nivel, impacto por gravedad legal, reglas de diagnóstico sobre datos sintéticos (RAT, auditoría, derechos) y disparadores de EIPD; más integración (registro en lote sin duplicados, CHECK de escala, aislamiento entre empresas, EIPD aprobada con contenido mínimo);
   - `tests/test_derechos.py` (16): router temporal, días hábiles con sábado y feriados, prórroga única, estándar dual y estados del plazo; más integración del repositorio (régimen y vencimiento al crear, prórroga, denegación fundada y aislamiento entre empresas);
   - `tests/test_addon_normativa.py` (21): corpus, recuperación, filtro de PII, copiloto y segregación;
   - `tests/test_correcciones.py` (10): regresión de D-01, D-03 y S-08, más **integración de migraciones contra PostgreSQL real**. La integración se activa con `LINCE_TEST_DATABASE_URL`, apuntando siempre a una BD desechable; ejecuta `init_db()` dos veces y verifica tablas, FK, tipos, seed y anulación de colgantes.
@@ -700,7 +746,7 @@ Discrepancias vigentes entre las reglas de `AGENTS.md` (objetivo) y el código:
 |---|---|---|---|
 | Registro y caracterización de tratamientos (RAT) | Ley 21.719 arts. 3, 12-14 ter; DS 662 art. 3 d) | **Cubierto** | `tratamientos` + 11 `rat_*`, importación y conciliación |
 | Base de licitud y consentimiento | arts. 12, 13, 16, 16 bis | Parcial | Campo de texto; sin gestión de la evidencia de consentimiento ni de su revocación |
-| Diagnóstico y evaluación | arts. 3, 14 quinquies, 48 | Parcial | 15 preguntas genéricas de seguridad, **no mapeadas a artículos** |
+| Diagnóstico y evaluación | arts. 3, 14 quinquies, 48 | **Cubierto** | Análisis de riesgos basado en los datos de Lince (§8.6). El checklist de seguridad de visitas sigue con 15 preguntas genéricas, no mapeadas a artículos |
 | Seguridad de la información | art. 14 quinquies; Ley 21.663 | Parcial | Checklist y evidencias |
 | Evidencias y trazabilidad | art. 3 a) | **Cubierto** | `evidencias` (URL) |
 | Visitas y auditorías internas | art. 48; DS 662 art. 13 d) | **Cubierto** | `visitas` |
@@ -708,13 +754,13 @@ Discrepancias vigentes entre las reglas de `AGENTS.md` (objetivo) y el código:
 | Transparencia y política | art. 14 ter | Parcial | Sólo como evidencia |
 | Vulneraciones de seguridad | art. 14 sexies | **No modelado** | Registro, reporte a la Agencia y comunicación a titulares |
 | Incidentes de ciberseguridad | Ley 21.663 arts. 9, 27 | **No modelado** | Plazos ante el CSIRT: alerta en 3 h, actualización en 72 h (24 h para operador de importancia vital) e informe en 15 días |
-| Evaluación de impacto (EIPD) | art. 15 ter | **No modelado** | — |
+| Evaluación de impacto (EIPD) | art. 15 ter | **Cubierto** | `eipd` (§8.6): disparadores a-d (a y d detectados desde el RAT), contenido mínimo legal, conclusión y consulta a la Agencia. Pendiente: lista orientativa de la Agencia |
 | Encargados y contratos | art. 15 bis | Parcial | Texto libre en el RAT |
 | Cesiones y transferencias internacionales | arts. 15, 27, 28 | Parcial | Campos del RAT |
 | Datos sensibles, de salud, biométricos y de NNA | arts. 16-16 quáter | Parcial | Campo `rat_tipo_datos_sensibles` |
 | Decisiones automatizadas | art. 8 bis | Parcial | Campo `rat_*` xi |
-| Exposición sancionatoria | arts. 34-40 | **No modelado** | Base para la matriz de riesgos del MPI |
-| MPI: programa, delegado, certificación y registro | arts. 48-53; DS 662 | **Cubierto parcialmente** | Perfil, delegado y estados declarativos. **Sin** matriz de riesgos (art. 3 e), protocolos, canal de denuncias ni sanciones internas (art. 3 f-i), ni plan anual del delegado (art. 13 i) |
+| Exposición sancionatoria | arts. 34-40 | **Cubierto** | Riesgos asociados a infracciones y graduados por gravedad legal (§8.6). No calcula multas: requiere procedimiento y hechos (art. 37) |
+| MPI: programa, delegado, certificación y registro | arts. 48-53; DS 662 | **Cubierto parcialmente** | Perfil, delegado, estados declarativos y **matriz de riesgos (art. 3 e)**. **Sin** protocolos, canal de denuncias ni sanciones internas (art. 3 f-i), ni plan anual del delegado (art. 13 i) |
 | Consulta normativa | 4 normas | **Cubierto** | `addons/normativa` |
 | Usuarios, roles y bitácora | art. 3 a) (responsabilidad demostrable) | **No modelado** | Contraseña compartida |
 
@@ -811,9 +857,9 @@ Los bloques 2 a 5 son del área de infraestructura y pueden avanzar en paralelo 
 | ~~Derechos de los titulares~~ | arts. 4-11 | **Hecho:** ver §8.5 |
 | Vulneraciones de seguridad | art. 14 sexies | Registro obligatorio, evaluación de riesgo, reporte a la Agencia "sin dilaciones indebidas", comunicación a titulares (datos sensibles, menores de 14, datos financieros) |
 | Incidentes de ciberseguridad | Ley 21.663 arts. 9, 27 | Clasificación de efecto significativo y reloj de reporte al CSIRT (3 h / 72 h o 24 h / 15 días). Conviene un flujo único de incidentes que derive las obligaciones de ambas leyes |
-| Evaluación de impacto (EIPD) | art. 15 ter | Disparadores obligatorios, metodología, riesgo inherente y residual, mitigación |
+| ~~Evaluación de impacto (EIPD)~~ | art. 15 ter | **Hecho:** ver §8.6 |
 | Encargados y transferencias | arts. 15 bis, 27, 28 | Inventario de proveedores, contrato mínimo, mecanismo de transferencia |
-| Matriz de riesgos y exposición sancionatoria | arts. 34-40; DS 662 art. 3 e) | Actividades de riesgo mapeadas a infracciones leves, graves y gravísimas |
+| ~~Matriz de riesgos y exposición sancionatoria~~ | arts. 34-40; DS 662 art. 3 e) | **Hecho:** ver §8.6 |
 | MPI completo | DS 662 arts. 3 f-i, 13 | Protocolos, canal de denuncias con reserva de identidad, sanciones internas, plan anual del delegado, control de vigencia del certificado |
 | Hallazgos y planes de acción | — | Entidad propia con responsable, plazo y cierre con evidencia |
 | Checklist normativo | — | Preguntas mapeadas a artículos, con ID estable |

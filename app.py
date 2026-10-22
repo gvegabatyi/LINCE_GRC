@@ -23,6 +23,7 @@ from modules import (
     empresas,
     evaluaciones,
     mpi_gobernanza,
+    riesgos,
     tratamientos,
     visitas,
     evidencias,
@@ -188,7 +189,7 @@ def _verificar_acceso_temporal() -> None:
 
     col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
     with col_l2:
-        st.title("🛡️ Lince GRC")
+        st.title("Lince GRC")
         st.caption("Gobierno, Riesgo y Cumplimiento")
         st.markdown("---")
         st.subheader("Acceso restringido")
@@ -279,7 +280,7 @@ else:
         st.session_state["nav_menu_principal"] = "▣ Empresas"
         st.rerun()
 
-st.sidebar.caption("ℹ️ *Contexto de navegación. Verifique la empresa seleccionada antes de guardar.*")
+st.sidebar.caption("*Contexto de navegación. Verifique la empresa seleccionada antes de guardar.*")
 st.sidebar.markdown("---")
 
 # ── Menú Principal ────────────────────────────────────────────────────────────
@@ -289,7 +290,8 @@ OPCIONES_MENU = [
     "◬ Evaluaciones GRC",
     "◆ Perfil MPI y Delegado",
     "☷ Tratamientos (RAT)",
-    "⚖ Derechos de los Titulares",
+    "◇ Derechos de los Titulares",
+    "△ Análisis de Riesgos",
     "⤓ Importar Antecedentes RAT",
     "⌖ Visitas / Auditorías",
     "◫ Evidencias",
@@ -351,6 +353,8 @@ elif "Tratamientos" in menu_opcion:
     tratamientos.render()
 elif "Derechos" in menu_opcion:
     derechos.render()
+elif "Riesgos" in menu_opcion:
+    riesgos.render()
 elif "Importar" in menu_opcion:
     importar_antecedentes.render()
 elif "Visitas" in menu_opcion:

@@ -33,21 +33,21 @@ CHECKLIST_MAX_PUNTAJE = len(CHECKLIST_PREGUNTAS)
 
 # Estados Internos de Implementación (Declarativos internos)
 ESTADOS_MPI_INTERNOS = [
-    ("preparacion", "🔵 En Preparación"),
-    ("implementado_internamente", "🟡 Implementado Internamente"),
-    ("en_revision_interna", "🟠 En Revisión Interna"),
+    ("preparacion", "En Preparación"),
+    ("implementado_internamente", "Implementado Internamente"),
+    ("en_revision_interna", "En Revisión Interna"),
 ]
 
 ESTADOS_MPI_INTERNOS_MAP = dict(ESTADOS_MPI_INTERNOS)
 
 # Estados Oficiales Registrales (Exigen respaldo documental y de la Agencia)
 ESTADOS_MPI_OFICIALES = [
-    ("sin_solicitud", "⚪ Sin Solicitud de Certificación"),
-    ("solicitud_en_tramite", "⏳ Solicitud en Trámite ante la Agencia"),
-    ("certificado_agencia", "🛡️ Certificado por la Agencia (Art. 15)"),
-    ("inscrito_registro_agencia", "📋 Inscrito en Registro Nacional (Art. 17)"),
-    ("vencido", "⚠️ Certificado Vencido"),
-    ("revocado", "❌ Certificado Revocado por la Agencia (Art. 20)"),
+    ("sin_solicitud", "Sin Solicitud de Certificación"),
+    ("solicitud_en_tramite", "Solicitud en Trámite ante la Agencia"),
+    ("certificado_agencia", "Certificado por la Agencia (Art. 15)"),
+    ("inscrito_registro_agencia", "Inscrito en Registro Nacional (Art. 17)"),
+    ("vencido", "Certificado Vencido"),
+    ("revocado", "Certificado Revocado por la Agencia (Art. 20)"),
 ]
 
 ESTADOS_MPI_OFICIALES_MAP = dict(ESTADOS_MPI_OFICIALES)
@@ -202,10 +202,10 @@ ESTADOS_EVALUACION = [
 ]
 
 ESTADO_EVALUACION_DISPLAY = {
-    "borrador":    "🔵 Borrador",
-    "en_progreso": "🟡 En Progreso",
-    "en_revision": "🟠 En Revisión",
-    "cerrada":     "✅ Cerrada",
+    "borrador":    "Borrador",
+    "en_progreso": "En Progreso",
+    "en_revision": "En Revisión",
+    "cerrada":     "Cerrada",
 }
 
 ESTADO_EVALUACION_COLOR = {
@@ -219,7 +219,7 @@ ESTADO_EVALUACION_COLOR = {
 # AVISOS LEGALES VISIBLES OBLIGATORIOS
 # ==============================================================================
 AVISO_ESTADOS_OFICIALES = (
-    "⚠️ **Aviso de Responsabilidad:** Los estados oficiales son antecedentes declarativos y documentales. "
+    "**Aviso de Responsabilidad:** Los estados oficiales son antecedentes declarativos y documentales. "
     "Lince GRC no certifica, registra, supervisa ni valida oficialmente modelos de prevención de infracciones. "
     "Estas atribuciones corresponden exclusivamente a la Agencia de Protección de Datos Personales."
 )
@@ -288,4 +288,72 @@ FERIADOS_CHILE = {
     "2027-01-01", "2027-03-26", "2027-03-27", "2027-05-01", "2027-05-21",
     "2027-06-21", "2027-06-28", "2027-07-16", "2027-08-15", "2027-09-18",
     "2027-09-19", "2027-10-11", "2027-11-01", "2027-12-08", "2027-12-25",
+}
+
+
+# ==============================================================================
+# ANÁLISIS DE RIESGOS (diagnóstico · matriz MPI DS 662 art. 3 e · EIPD art. 15 ter)
+# ==============================================================================
+# Catálogo de infracciones de la Ley 21.719 (arts. 34 bis, 34 ter y 34 quáter),
+# usado para graduar los riesgos según la gravedad de su sanción (DS 662 art. 3 e).
+INFRACCIONES_LEY_21719 = {
+    "34 bis a": ("leve", "Incumplir el deber de información y transparencia (art. 14 ter)"),
+    "34 bis b": ("leve", "Carecer de un medio de contacto operativo para que los titulares ejerzan sus derechos"),
+    "34 bis c": ("leve", "Omitir, responder incompleta o fuera de plazo las solicitudes de los titulares"),
+    "34 bis d": ("leve", "Omitir comunicaciones obligatorias a la Agencia"),
+    "34 bis f": ("leve", "Otras infracciones no calificadas como graves o gravísimas"),
+    "34 ter a": ("grave", "Tratar datos sin consentimiento ni fundamento de licitud, o con finalidad distinta"),
+    "34 ter b": ("grave", "Comunicar o ceder datos sin consentimiento cuando es necesario, o para un fin distinto"),
+    "34 ter c": ("grave", "Tratar datos innecesarios para los fines (proporcionalidad, art. 3 c)"),
+    "34 ter d": ("grave", "Tratar datos inexactos, incompletos o desactualizados"),
+    "34 ter e": ("grave", "Impedir u obstaculizar el ejercicio de los derechos del titular"),
+    "34 ter f": ("grave", "No responder, responder tarde o denegar sin causa el bloqueo temporal"),
+    "34 ter g": ("grave", "Tratar datos de niños, niñas y adolescentes con infracción a la ley"),
+    "34 ter i": ("grave", "Vulnerar el deber de secreto o confidencialidad (art. 14 bis)"),
+    "34 ter j": ("grave", "Vulnerar las obligaciones de seguridad (art. 14 quinquies)"),
+    "34 ter k": ("grave", "Omitir comunicaciones o registros de vulneraciones de seguridad"),
+    "34 ter m": ("grave", "Realizar transferencias internacionales en contravención a la ley"),
+    "34 quater d": ("gravisima", "Vulnerar el secreto sobre datos sensibles o de infracciones"),
+    "34 quater e": ("gravisima", "Tratar, comunicar o ceder a sabiendas datos sensibles o de NNA contra la ley"),
+    "34 quater f": ("gravisima", "Omitir deliberadamente la comunicación de vulneraciones de seguridad"),
+    "34 quater h": ("gravisima", "Realizar a sabiendas transferencias internacionales contra la ley"),
+    "34 quater k": ("gravisima", "Incumplir la obligación de evaluación de impacto (art. 15 ter)"),
+}
+GRAVEDAD_LEGAL_LABEL = {"leve": "Leve", "grave": "Grave", "gravisima": "Gravísima"}
+# Impacto sugerido (1-5) según la gravedad legal de la infracción asociada
+IMPACTO_POR_GRAVEDAD = {"leve": 2, "grave": 4, "gravisima": 5}
+
+CATEGORIAS_RIESGO = [
+    ("licitud", "Licitud y finalidad"),
+    ("proporcionalidad", "Proporcionalidad y conservación"),
+    ("transparencia", "Transparencia e información"),
+    ("derechos", "Derechos de los titulares"),
+    ("seguridad", "Seguridad de la información"),
+    ("terceros", "Encargados y cesiones"),
+    ("transferencias", "Transferencias internacionales"),
+    ("sensibles", "Datos sensibles y NNA"),
+    ("automatizadas", "Decisiones automatizadas"),
+    ("gobernanza", "Gobernanza y prevención"),
+]
+CATEGORIAS_RIESGO_MAP = dict(CATEGORIAS_RIESGO)
+
+ESCALA_PROBABILIDAD = {1: "Rara", 2: "Improbable", 3: "Posible", 4: "Probable", 5: "Casi cierta"}
+ESCALA_IMPACTO = {1: "Insignificante", 2: "Menor", 3: "Moderado", 4: "Mayor", 5: "Severo"}
+
+RESPUESTAS_RIESGO = [
+    ("mitigar", "Mitigar"),
+    ("evitar", "Evitar"),
+    ("transferir", "Transferir"),
+    ("aceptar", "Aceptar"),
+]
+RESPUESTAS_RIESGO_MAP = dict(RESPUESTAS_RIESGO)
+ESTADOS_RIESGO = [("abierto", "Abierto"), ("en_tratamiento", "En tratamiento"), ("cerrado", "Cerrado")]
+ESTADOS_RIESGO_MAP = dict(ESTADOS_RIESGO)
+
+# Disparadores de EIPD obligatoria (Ley 21.719 art. 15 ter, inciso 2)
+DISPARADORES_EIPD = {
+    "a": "Evaluación sistemática de aspectos personales con decisiones automatizadas o perfilamiento con efectos jurídicos significativos",
+    "b": "Tratamiento masivo de datos o a gran escala",
+    "c": "Observación o monitoreo sistemático de una zona de acceso público",
+    "d": "Tratamiento de datos sensibles y especialmente protegidos en las hipótesis de excepción del consentimiento",
 }

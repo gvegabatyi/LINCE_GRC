@@ -36,7 +36,7 @@ def _estado_label(estado: str) -> str:
 
 
 def render() -> None:
-    st.header("📁 Evaluaciones GRC")
+    st.header("Evaluaciones GRC")
     st.caption(
         "Una evaluación es el contenedor principal de un proyecto GRC (diagnóstico, "
         "seguimiento o cierre). Agrupa visitas, tratamientos, hallazgos y riesgos "
@@ -45,10 +45,10 @@ def render() -> None:
 
     df_empresas = get_empresas_df()
     if df_empresas.empty:
-        st.warning("⚠️ Primero debes registrar al menos una empresa antes de crear evaluaciones.")
+        st.warning("Primero debes registrar al menos una empresa antes de crear evaluaciones.")
         return
 
-    tab_lista, tab_crear = st.tabs(["📋 Listado de Evaluaciones", "➕ Nueva Evaluación"])
+    tab_lista, tab_crear = st.tabs(["Listado de Evaluaciones", "Nueva Evaluación"])
 
     # Mapa empresa_str → empresa_id (reutilizado en ambas pestañas)
     empresa_map = {
@@ -96,7 +96,7 @@ def render() -> None:
             )
             observaciones   = st.text_area("Observaciones iniciales", height=60)
 
-            submitted = st.form_submit_button("💾 Crear Evaluación", use_container_width=True, type="primary")
+            submitted = st.form_submit_button("Crear Evaluación", use_container_width=True, type="primary")
             if submitted:
                 if not nombre_eval or not nombre_eval.strip():
                     st.error("El nombre de la evaluación es obligatorio.")
@@ -119,10 +119,10 @@ def render() -> None:
                         observaciones=observaciones,
                     )
                     if ok:
-                        st.success(f"✅ {msg}")
+                        st.success(f"{msg}")
                         st.rerun()
                     else:
-                        st.error(f"❌ {msg}")
+                        st.error(f"{msg}")
 
     # ══════════════════════════════════════════════════════════════════════════
     # TAB 1: LISTADO DE EVALUACIONES
@@ -131,7 +131,7 @@ def render() -> None:
         col_f1, col_f2 = st.columns([2, 2])
         with col_f1:
             filtro_emp_key = st.selectbox(
-                "🔍 Filtrar por Empresa:",
+                "Filtrar por Empresa:",
                 ["Todas las empresas"] + list(empresa_map.keys()),
                 key="eval_filtro_empresa",
             )
@@ -165,7 +165,7 @@ def render() -> None:
         st.dataframe(df_view, use_container_width=True, hide_index=True)
 
         st.markdown("---")
-        st.subheader("⚙️ Detalle y Gestión de Evaluación")
+        st.subheader("Detalle y Gestión de Evaluación")
 
         eval_opciones = {
             f"ID {r['id']} — {r['nombre']} | {r['empresa']} | {_estado_label(r['estado'])}": r["id"]
@@ -176,7 +176,7 @@ def render() -> None:
         e_row = df_eval[df_eval["id"] == eval_sel_id].iloc[0]
 
         # ── Detalle ────────────────────────────────────────────────────────────
-        with st.expander(f"📋 Detalle: {e_row['nombre']}", expanded=True):
+        with st.expander(f"Detalle: {e_row['nombre']}", expanded=True):
             dc1, dc2, dc3 = st.columns(3)
             with dc1:
                 st.markdown(f"**Empresa:** {e_row['empresa']} ({e_row['rut_empresa']})")
@@ -207,7 +207,7 @@ def render() -> None:
                 st.markdown(f"**Observaciones:** {e_row['observaciones']}")
 
         # ── Editar ─────────────────────────────────────────────────────────────
-        with st.expander(f"✏️ Editar evaluación: {e_row['nombre']}", expanded=False):
+        with st.expander(f"Editar evaluación: {e_row['nombre']}", expanded=False):
             with st.form(f"form_edit_eval_{eval_sel_id}"):
                 col_e1, col_e2 = st.columns(2)
                 with col_e1:
@@ -284,26 +284,26 @@ def render() -> None:
                             observaciones=e_obs,
                         )
                         if ok:
-                            st.success(f"✅ {msg}")
+                            st.success(f"{msg}")
                             st.rerun()
                         else:
-                            st.error(f"❌ {msg}")
+                            st.error(f"{msg}")
 
         # ── Eliminar ───────────────────────────────────────────────────────────
-        with st.expander("🗑️ Eliminar esta Evaluación", expanded=False):
+        with st.expander("Eliminar esta Evaluación", expanded=False):
             conteos = contar_elementos_evaluacion(eval_sel_id)
             total_vinculados = conteos["visitas"] + conteos["tratamientos"] + conteos["evidencias"]
 
             if total_vinculados > 0:
                 st.info(
-                    f"ℹ️ Esta evaluación tiene registros vinculados: "
+                    f"Esta evaluación tiene registros vinculados: "
                     f"{conteos['visitas']} visita(s), "
                     f"{conteos['tratamientos']} tratamiento(s), "
                     f"{conteos['evidencias']} evidencia(s). "
                     "Al eliminarla, esos registros conservan sus datos pero quedan sin evaluación asignada."
                 )
             st.warning(
-                "⚠️ Esta acción es permanente. "
+                "Esta acción es permanente. "
                 "Las visitas, tratamientos y evidencias vinculadas NO se eliminarán; "
                 "solo perderán la referencia a esta evaluación."
             )

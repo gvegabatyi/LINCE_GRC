@@ -55,15 +55,15 @@ def _indice_empresa_activa(empresa_map: dict) -> int:
 
 
 def render() -> None:
-    st.header("📋 Registro de Actividades de Tratamiento (RAT)")
+    st.header("Registro de Actividades de Tratamiento (RAT)")
     st.caption("Estructura conforme al **Art. 3 letra d), numerales i a xi del Decreto N° 662** (Ministerio de Hacienda)")
 
     df_empresas = get_empresas_df()
     if df_empresas.empty:
-        st.warning("⚠️ Primero debes registrar al menos una empresa antes de crear tratamientos.")
+        st.warning("Primero debes registrar al menos una empresa antes de crear tratamientos.")
         return
 
-    tab_lista, tab_crear = st.tabs(["📋 Listado de Tratamientos (RAT)", "➕ Registrar Nuevo Tratamiento (Art. 3 d)"])
+    tab_lista, tab_crear = st.tabs(["Listado de Tratamientos (RAT)", "Registrar Nuevo Tratamiento (Art. 3 d)"])
     empresa_map = {
         f"{r['id']} - {r['nombre']} ({r['rut']})": r["id"]
         for _, r in df_empresas.iterrows()
@@ -89,7 +89,7 @@ def render() -> None:
         with st.form("form_crear_tratamiento", clear_on_submit=True):
 
             st.markdown("---")
-            st.markdown("### 📌 CAMPOS OBLIGATORIOS DEL ART. 3 LETRA d) (Numerales i al xi)")
+            st.markdown("### CAMPOS OBLIGATORIOS DEL ART. 3 LETRA d) (Numerales i al xi)")
 
             # Numeral i y ii
             col1, col2 = st.columns(2)
@@ -181,7 +181,7 @@ def render() -> None:
                 )
 
             st.markdown("---")
-            st.markdown("### ⚙️ CAMPOS COMPLEMENTARIOS GRC (Opcionales)")
+            st.markdown("### CAMPOS COMPLEMENTARIOS GRC (Opcionales)")
             with st.expander("Ver campos complementarios de gestión GRC", expanded=False):
                 col_g1, col_g2 = st.columns(2)
                 with col_g1:
@@ -214,7 +214,7 @@ def render() -> None:
                 eval_key = st.selectbox("Evaluación GRC Vinculada", list(eval_ops.keys()))
                 ev_key = st.selectbox("Evidencia Documental Vinculada (Enlace)", list(evidencias_ops.keys()))
 
-            submitted = st.form_submit_button("💾 Guardar Tratamiento en RAT", use_container_width=True, type="primary")
+            submitted = st.form_submit_button("Guardar Tratamiento en RAT", use_container_width=True, type="primary")
             if submitted:
                 # Validar que al menos las finalidades y tipos de datos estén indicados
                 if not rat_v or not rat_v.strip() or not rat_i or not rat_i.strip():
@@ -245,10 +245,10 @@ def render() -> None:
                         evidencia_id=evidencias_ops[ev_key],
                     )
                     if ok:
-                        st.success(f"✅ {msg}")
+                        st.success(f"{msg}")
                         st.rerun()
                     else:
-                        st.error(f"❌ {msg}")
+                        st.error(f"{msg}")
 
     # ==========================================================================
     # LISTADO Y DETALLE
@@ -257,7 +257,7 @@ def render() -> None:
         col_f1, col_f2 = st.columns(2)
         with col_f1:
             filtro_emp = st.selectbox(
-                "🔍 Filtrar por Empresa:",
+                "Filtrar por Empresa:",
                 ["Todas las empresas"] + list(empresa_map.keys()),
                 key="trat_filtro_empresa",
             )
@@ -269,7 +269,7 @@ def render() -> None:
                 if not df_evals.empty:
                     for _, r in df_evals.iterrows():
                         eval_ops_filtro[f"{r['id']} - {r['nombre']}"] = r["id"]
-            filtro_eval_key = st.selectbox("🔍 Filtrar por Evaluación:", list(eval_ops_filtro.keys()), key="trat_filtro_eval")
+            filtro_eval_key = st.selectbox("Filtrar por Evaluación:", list(eval_ops_filtro.keys()), key="trat_filtro_eval")
             eval_id_filtro = eval_ops_filtro[filtro_eval_key]
 
         df_trat = get_tratamientos_df(empresa_id=emp_id_filtro, evaluacion_id=eval_id_filtro)
@@ -289,7 +289,7 @@ def render() -> None:
         )
 
         st.markdown("---")
-        st.subheader("⚙️ Detalle de los 11 Numerales Normativos (Art. 3 d)")
+        st.subheader("Detalle de los 11 Numerales Normativos (Art. 3 d)")
         trat_dict = {
             f"{r['id']} - {r['nombre_tratamiento']} ({r['empresa']})": r["id"]
             for _, r in df_trat.iterrows()
@@ -298,7 +298,7 @@ def render() -> None:
         trat_sel_id  = trat_dict[trat_sel_key]
         t_row = df_trat[df_trat["id"] == trat_sel_id].iloc[0]
 
-        with st.expander(f"🔍 Ficha Completa del RAT: {t_row['nombre_tratamiento']}", expanded=True):
+        with st.expander(f"Ficha Completa del RAT: {t_row['nombre_tratamiento']}", expanded=True):
             st.markdown(f"**Empresa:** {t_row['empresa']} ({t_row['rut_empresa']}) | **Evaluación:** {t_row['evaluacion_nombre'] or 'Sin evaluación'}")
             st.markdown("---")
             st.markdown("**11 Numerales del Art. 3 letra d) (Decreto N° 662):**")
@@ -321,9 +321,9 @@ def render() -> None:
             st.markdown("---")
             st.markdown(f"**Evidencia adjunta:** {t_row['evidencia_descripcion'] or 'Sin evidencia vinculada'}")
             if t_row.get("evidencia_url"):
-                st.markdown(f"🔗 [Abrir Evidencia Externa]({t_row['evidencia_url']})")
+                st.markdown(f"[Abrir Evidencia Externa]({t_row['evidencia_url']})")
 
-            if st.button("🗑️ Eliminar este Tratamiento", key=f"del_trat_{trat_sel_id}", type="secondary"):
+            if st.button("Eliminar este Tratamiento", key=f"del_trat_{trat_sel_id}", type="secondary"):
                 ok, msg = delete_tratamiento(trat_sel_id)
                 if ok:
                     st.success(msg)

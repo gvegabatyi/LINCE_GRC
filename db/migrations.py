@@ -174,6 +174,77 @@ def _aplicar_paso_9(cursor) -> None:
     )
 
 
+def _aplicar_paso_10(cursor) -> None:
+    """
+    PASO 10: análisis de riesgos. Idempotente.
+      - eipd: evaluación de impacto por tratamiento (Ley 21.719 art. 15 ter).
+      - riesgos: registro de riesgos (diagnóstico), base de la matriz del MPI
+        (DS 662 art. 3 e) y de la EIPD. CHECK garantiza la escala 1-5.
+    """
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS eipd (
+            id                          SERIAL PRIMARY KEY,
+            empresa_id                  INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+            tratamiento_id              INTEGER REFERENCES tratamientos(id) ON DELETE SET NULL,
+            fecha                       DATE NOT NULL DEFAULT CURRENT_DATE,
+            disparador_a                BOOLEAN NOT NULL DEFAULT FALSE,
+            disparador_b                BOOLEAN NOT NULL DEFAULT FALSE,
+            disparador_c                BOOLEAN NOT NULL DEFAULT FALSE,
+            disparador_d                BOOLEAN NOT NULL DEFAULT FALSE,
+            descripcion_operaciones     TEXT,
+            finalidad                   TEXT,
+            necesidad_proporcionalidad  TEXT,
+            medidas_mitigacion          TEXT,
+            conclusion                  VARCHAR(30),
+            consulta_agencia            BOOLEAN NOT NULL DEFAULT FALSE,
+            estado                      VARCHAR(20) NOT NULL DEFAULT 'borrador',
+            responsable                 VARCHAR(255),
+            evidencia_id                INTEGER REFERENCES evidencias(id) ON DELETE SET NULL,
+            created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_eipd_empresa ON eipd (empresa_id, tratamiento_id)")
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS riesgos (
+            id                      SERIAL PRIMARY KEY,
+            empresa_id              INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+            tratamiento_id          INTEGER REFERENCES tratamientos(id) ON DELETE SET NULL,
+            eipd_id                 INTEGER REFERENCES eipd(id) ON DELETE SET NULL,
+            origen                  VARCHAR(20) NOT NULL DEFAULT 'manual',
+            codigo_regla            VARCHAR(20),
+            titulo                  VARCHAR(255) NOT NULL,
+            descripcion             TEXT,
+            categoria               VARCHAR(40),
+            infraccion_ref          VARCHAR(20),
+            gravedad_legal          VARCHAR(15),
+            probabilidad            SMALLINT NOT NULL CHECK (probabilidad BETWEEN 1 AND 5),
+            impacto                 SMALLINT NOT NULL CHECK (impacto BETWEEN 1 AND 5),
+            controles               TEXT,
+            probabilidad_residual   SMALLINT CHECK (probabilidad_residual BETWEEN 1 AND 5),
+            impacto_residual        SMALLINT CHECK (impacto_residual BETWEEN 1 AND 5),
+            respuesta               VARCHAR(20),
+            plan_accion             TEXT,
+            responsable             VARCHAR(255),
+            plazo                   DATE,
+            estado                  VARCHAR(20) NOT NULL DEFAULT 'abierto',
+            evidencia_id            INTEGER REFERENCES evidencias(id) ON DELETE SET NULL,
+            created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_riesgos_empresa_estado ON riesgos (empresa_id, estado)")
+    # Un riesgo de diagnóstico por regla y tratamiento: evita duplicar propuestas aceptadas
+    cursor.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_riesgos_regla ON riesgos "
+        "(empresa_id, codigo_regla, COALESCE(tratamiento_id, 0)) WHERE codigo_regla IS NOT NULL"
+    )
+
+
 def init_db() -> None:
     """
     Inicializa y migra la base de datos de forma segura e idempotente (Fase 1 y Fase 2A).
@@ -568,7 +639,20 @@ def init_db() -> None:
                 "Revise el log del servidor."
             ) from exc
 
-        # Confirmar toda la transacción de migración (Fase 1, 2A, 2A.2, 2A.3 y Pasos 8-9)
+        # ==================================================================
+        # PASO 10: análisis de riesgos (registro de riesgos y EIPD)
+        # ==================================================================
+        try:
+            with conn.cursor() as c_p10:
+                _aplicar_paso_10(c_p10)
+        except Exception as exc:
+            _log(f"[migrations] Error en Paso 10: {type(exc).__name__}: {exc}")
+            raise RuntimeError(
+                f"Error en migración Paso 10 (análisis de riesgos) [{type(exc).__name__}]. "
+                "Revise el log del servidor."
+            ) from exc
+
+        # Confirmar toda la transacción de migración (Fase 1, 2A, 2A.2, 2A.3 y Pasos 8-10)
         conn.commit()
 
     except RuntimeError as exc:

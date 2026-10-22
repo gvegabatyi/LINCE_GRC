@@ -20,7 +20,7 @@ Estado al 2026-10-22. "No modelado" indica una brecha de producto, no un incumpl
 |---|---|---|---|
 | Registro y caracterización de tratamientos | Ley 21.719 arts. 3, 12–14 ter; DS 662 art. 3 d) | `modules/tratamientos.py`, `importar_antecedentes.py` (RAT con campos `rat_*`) | Cubierto |
 | Base de licitud y consentimiento | arts. 12, 13, 16, 16 bis | RAT (`base_legal`, `rat_base_licitud_interes_legitimo`) | Parcial: sin gestión de la evidencia de consentimiento ni de su revocación |
-| Diagnóstico y evaluación de cumplimiento | arts. 3, 14 quinquies, 48 | `modules/evaluaciones.py` | Parcial: el checklist actual es de seguridad general; falta mapear cada pregunta a artículos |
+| Diagnóstico y evaluación de cumplimiento | arts. 3, 14 quinquies, 48 | `modules/riesgos.py` (diagnóstico de riesgos desde los datos), `modules/evaluaciones.py` | Cubierto. El checklist de visitas aún no está mapeado a artículos |
 | Seguridad de la información | art. 14 quinquies; Ley 21.663 | Evaluaciones y evidencias | Parcial |
 | Evidencias y trazabilidad | art. 3 a) (responsabilidad demostrable) | `modules/evidencias.py` | Cubierto |
 | Visitas, entrevistas y auditorías internas | art. 48; DS 662 art. 13 d) | `modules/visitas.py` | Cubierto |
@@ -28,12 +28,12 @@ Estado al 2026-10-22. "No modelado" indica una brecha de producto, no un incumpl
 | Transparencia y política de tratamiento | art. 14 ter | Evidencias | Parcial |
 | Vulneraciones de seguridad (registro, Agencia, titulares) | art. 14 sexies | — | No modelado |
 | Incidentes de ciberseguridad (CSIRT: 3 h / 72 h / 15 días) | Ley 21.663 arts. 9, 27 | — | No modelado |
-| Evaluación de impacto (EIPD) | art. 15 ter | — | No modelado |
+| Evaluación de impacto (EIPD) | art. 15 ter | `modules/riesgos.py`, tabla `eipd` | Cubierto: disparadores a-d, contenido mínimo, conclusión y consulta a la Agencia |
 | Encargados y contratos | art. 15 bis | RAT (`encargados`, texto libre) | Parcial |
 | Cesiones y transferencias internacionales | arts. 15, 27, 28 | RAT (`rat_destinatarios_cesiones`, `rat_transferencias_internacionales_art27`) | Parcial |
 | Datos sensibles, de salud, biométricos y de NNA | arts. 16 a 16 quáter | RAT (`rat_tipo_datos_sensibles`) | Parcial |
 | Decisiones automatizadas | art. 8 bis | RAT (`rat_decisiones_automatizadas_perfilamiento`) | Parcial |
-| Exposición sancionatoria | arts. 34–40 | — | No modelado (útil para la matriz de riesgos del MPI) |
+| Exposición sancionatoria | arts. 34–40 | `modules/riesgos.py`, tabla `riesgos` | Cubierto: riesgos asociados a infracciones y graduados por gravedad legal (sin cálculo de multas) |
 | MPI: programa, delegado, certificación y registro | Ley 21.719 arts. 48–53; DS 662 | `modules/mpi_gobernanza.py`, `services/mpi_service.py` | Cubierto (ver mapa de detalle) |
 | Consulta normativa | Las 4 normas | `addons/normativa` (citas + copiloto) | Cubierto |
 | Reportes | — | `modules/exportar.py`, `modules/dashboard.py` | Cubierto |
@@ -49,7 +49,7 @@ Estado al 2026-10-22. "No modelado" indica una brecha de producto, no un incumpl
 | Medios y facultades del delegado | DS 662 arts. 3 c), 9 | `mpi_delegados.recursos_materiales_facultades` | Cubierto |
 | Contacto público del delegado e informe a la Agencia | DS 662 arts. 11, 13 inc. final | `mpi_delegados.email_contacto_publico`, `canal_atencion_detalles` | Falta evidencia de publicación y de comunicación a la Agencia |
 | Caracterización de tratamientos (11 ítems) | DS 662 art. 3 d) | `modules/tratamientos.py` / `tratamientos.rat_*` (RAT, Fase 2A) | Cubierto en el esquema; auditar la completitud de cada registro (ver abajo) |
-| Matriz de riesgos graduada según sanciones | DS 662 art. 3 e) | `modules/evaluaciones.py` | Verificar que la matriz mapee a los arts. 34 bis, 34 ter y 34 quáter |
+| Matriz de riesgos graduada según sanciones | DS 662 art. 3 e) | `modules/riesgos.py` (pestaña Matriz MPI) | Cubierto |
 | Protocolos proporcionales | DS 662 art. 3 f) | `modules/evidencias.py` | Evidencia documental |
 | Reporte interno, reporte a la Agencia/titulares, autodenuncia | DS 662 art. 3 g) | — | No modelado |
 | Sanciones internas y procedimiento | DS 662 art. 3 h) | — | No modelado |

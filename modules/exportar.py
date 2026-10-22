@@ -19,6 +19,7 @@ from openpyxl.utils import get_column_letter
 
 from db.repositories.derechos import get_solicitudes_df
 from db.repositories.empresas import get_empresas_df
+from db.repositories.riesgos import get_eipd_df, get_riesgos_df
 from db.repositories.evaluaciones import get_evaluaciones_df
 from db.repositories.tratamientos import get_tratamientos_df
 from db.repositories.visitas import get_visitas_df
@@ -35,7 +36,12 @@ from utils.constants import (
     ESTADOS_MPI_OFICIALES_MAP,
     DERECHOS_TITULAR_MAP,
     ESTADOS_SOLICITUD_MAP,
+    CATEGORIAS_RIESGO_MAP,
+    GRAVEDAD_LEGAL_LABEL,
+    RESPUESTAS_RIESGO_MAP,
+    ESTADOS_RIESGO_MAP,
 )
+from services.riesgos_service import nivel_riesgo
 from services import plazos_service as plazos
 from services.checklist_service import calcular_porcentaje
 
@@ -442,6 +448,54 @@ def generar_excel_completo() -> bytes:
     except Exception:
         pass
 
+    # ── Hoja 14: RIESGOS (registro y matriz) ─────────────────────────────────────
+    try:
+        df_rsg = get_riesgos_df()
+        ws14 = wb.create_sheet(title="RIESGOS")
+        ws14.append([
+            "ID", "Empresa", "Tratamiento", "Riesgo", "Categoría", "Infracción (Ley 21.719)",
+            "Gravedad Legal", "Probabilidad", "Impacto", "Nivel Inherente", "Controles",
+            "Nivel Residual", "Respuesta", "Plan de Acción", "Responsable", "Plazo", "Estado", "Origen",
+        ])
+        for _, r in df_rsg.iterrows():
+            _, _, niv = nivel_riesgo(r["probabilidad"], r["impacto"])
+            residual = ""
+            if pd.notnull(r["probabilidad_residual"]) and pd.notnull(r["impacto_residual"]):
+                residual = nivel_riesgo(r["probabilidad_residual"], r["impacto_residual"])[2]
+            ws14.append([
+                r["id"], r["empresa"], r["tratamiento"] or "", r["titulo"],
+                CATEGORIAS_RIESGO_MAP.get(r["categoria"], r["categoria"] or ""),
+                r["infraccion_ref"] or "", GRAVEDAD_LEGAL_LABEL.get(r["gravedad_legal"], ""),
+                int(r["probabilidad"]), int(r["impacto"]), niv, r["controles"] or "", residual,
+                RESPUESTAS_RIESGO_MAP.get(r["respuesta"], "") if r["respuesta"] else "",
+                r["plan_accion"] or "", r["responsable"] or "",
+                str(r["plazo"])[:10] if pd.notnull(r["plazo"]) else "",
+                ESTADOS_RIESGO_MAP.get(r["estado"], r["estado"]), r["origen"],
+            ])
+        _format_sheet(ws14, header_fill, header_font, thin_border)
+    except Exception:
+        pass
+
+    # ── Hoja 15: EIPD (Ley 21.719 art. 15 ter) ─────────────────────────────────
+    try:
+        df_eipd = get_eipd_df()
+        ws15 = wb.create_sheet(title="EIPD")
+        ws15.append([
+            "ID", "Empresa", "Tratamiento", "Fecha", "Disparador a", "Disparador b", "Disparador c",
+            "Disparador d", "Conclusión", "Consulta a la Agencia", "Estado", "Responsable",
+        ])
+        for _, r in df_eipd.iterrows():
+            ws15.append([
+                r["id"], r["empresa"], r["tratamiento"] or "", str(r["fecha"])[:10],
+                *("Sí" if r[f"disparador_{k}"] else "No" for k in "abcd"),
+                {"riesgo_aceptable": "Riesgo residual aceptable", "alto_riesgo_residual": "Alto riesgo residual"}.get(r["conclusion"], ""),
+                "Sí" if r["consulta_agencia"] else "No",
+                "Aprobada" if r["estado"] == "aprobada" else "Borrador", r["responsable"] or "",
+            ])
+        _format_sheet(ws15, header_fill, header_font, thin_border)
+    except Exception:
+        pass
+
     _neutralizar_formulas(wb)
     buffer = io.BytesIO()
     wb.save(buffer)
@@ -465,7 +519,7 @@ def _neutralizar_formulas(wb) -> None:
 # MÓDULO UI
 # ==============================================================================
 def render() -> None:
-    st.header("📊 Generación y Descarga de Informe Completo")
+    st.header("Generación y Descarga de Informe Completo")
     st.write("Genera un libro Excel consolidado (`.xlsx`) con hojas formateadas profesionalmente:")
 
     st.markdown("""
@@ -489,18 +543,22 @@ def render() -> None:
 
     **Derechos de los Titulares:**
     - **Hoja 13 — SOLICITUDES_DERECHOS:** Folio, derecho, régimen, plazos y estado. Por minimización no incluye nombre ni contacto del titular.
+
+    **Análisis de Riesgos:**
+    - **Hoja 14 — RIESGOS:** Registro de riesgos con infracción asociada, niveles inherente y residual y plan de acción.
+    - **Hoja 15 — EIPD:** Evaluaciones de impacto por tratamiento (art. 15 ter): disparadores, conclusión y estado.
     """)
 
     st.markdown("---")
 
     col_exp1, col_exp2 = st.columns([1, 2])
     with col_exp1:
-        if st.button("🔄 Generar Informe Excel", type="primary", use_container_width=True):
+        if st.button("Generar Informe Excel", type="primary", use_container_width=True):
             with st.spinner("Generando libro Excel…"):
                 try:
                     excel_bytes = generar_excel_completo()
                     st.session_state["excel_informe"] = excel_bytes
-                    st.success("✅ ¡Informe consolidado generado con éxito!")
+                    st.success("¡Informe consolidado generado con éxito!")
                 except Exception as exc:
                     st.error(f"Error al generar el informe ({type(exc).__name__}). Intente nuevamente.")
 
@@ -508,7 +566,7 @@ def render() -> None:
         if "excel_informe" in st.session_state:
             nombre_archivo = f"Lince_GRC_Informe_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
             st.download_button(
-                label="📥 Descargar Informe Completo Excel (.xlsx)",
+                label="Descargar Informe Completo Excel (.xlsx)",
                 data=st.session_state["excel_informe"],
                 file_name=nombre_archivo,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

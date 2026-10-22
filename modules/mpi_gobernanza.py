@@ -44,12 +44,12 @@ def _build_evidencia_options(empresa_id: int) -> dict:
 
 
 def render() -> None:
-    st.header("🛡️ Perfil MPI y Delegado de Protección de Datos")
+    st.header("Perfil MPI y Delegado de Protección de Datos")
     st.caption("Implementación de Gobernanza conforme al Decreto N° 662 (Ministerio de Hacienda / Ley N° 21.719)")
 
     df_empresas = get_empresas_df()
     if df_empresas.empty:
-        st.warning("⚠️ Debes registrar al menos una empresa antes de configurar el Perfil MPI.")
+        st.warning("Debes registrar al menos una empresa antes de configurar el Perfil MPI.")
         return
 
     empresa_map = {
@@ -60,13 +60,13 @@ def render() -> None:
     # Selector superior de empresa
     col_sel, _ = st.columns([2, 2])
     with col_sel:
-        empresa_sel_label = st.selectbox("🏢 Selecciona la Empresa a gestionar:", list(empresa_map.keys()))
+        empresa_sel_label = st.selectbox("Selecciona la Empresa a gestionar:", list(empresa_map.keys()))
         empresa_id = empresa_map[empresa_sel_label]
 
     tab_perfil, tab_dpd, tab_normativa = st.tabs([
-        "🏢 Perfil MPI (Art. 3 a)",
-        "🛡️ Delegado DPD (Arts. 3 b, c; 6-13)",
-        "📖 Trazabilidad Normativa (Decreto N° 662)",
+        "Perfil MPI (Art. 3 a)",
+        "Delegado DPD (Arts. 3 b, c; 6-13)",
+        "Trazabilidad Normativa (Decreto N° 662)",
     ])
 
     # ==========================================================================
@@ -74,7 +74,7 @@ def render() -> None:
     # ==========================================================================
     with tab_perfil:
         st.subheader("Individualización del Responsable y Perfil del Modelo")
-        st.info("📌 **Referencia:** Decreto N° 662, Art. 3 letra a) (Individualización del responsable y representante legal).")
+        st.info("**Referencia:** Decreto N° 662, Art. 3 letra a) (Individualización del responsable y representante legal).")
 
         perfil_actual = get_perfil_activo(empresa_id)
         evidencias_ops = _build_evidencia_options(empresa_id)
@@ -187,7 +187,7 @@ def render() -> None:
                     options=list(evidencias_ops.keys()),
                 )
 
-            sub_perfil = st.form_submit_button("💾 Guardar Perfil MPI", type="primary", use_container_width=True)
+            sub_perfil = st.form_submit_button("Guardar Perfil MPI", type="primary", use_container_width=True)
             if sub_perfil:
                 evidencia_seleccionada = evidencias_ops[ev_id_perfil]
 
@@ -221,10 +221,10 @@ def render() -> None:
                             perfil_id=perfil_actual["id"] if perfil_actual else None,
                         )
                         if ok:
-                            st.success(f"✅ {msg}")
+                            st.success(f"{msg}")
                             st.rerun()
                         else:
-                            st.error(f"❌ {msg}")
+                            st.error(f"{msg}")
                 elif estado_of_sel == "inscrito_registro_agencia":
                     if not evidencia_seleccionada:
                         st.error("Para registrar estado 'Inscrito en Registro Nacional (Art. 17)' debes adjuntar la evidencia documental de respaldo.")
@@ -255,10 +255,10 @@ def render() -> None:
                             perfil_id=perfil_actual["id"] if perfil_actual else None,
                         )
                         if ok:
-                            st.success(f"✅ {msg}")
+                            st.success(f"{msg}")
                             st.rerun()
                         else:
-                            st.error(f"❌ {msg}")
+                            st.error(f"{msg}")
                 elif estado_of_sel in ["vencido", "revocado"]:
                     if not evidencia_seleccionada and (not alcance or not alcance.strip()):
                         st.error("Para registrar estado 'Vencido' o 'Revocado' debes adjuntar la evidencia documental o ingresar un comentario justificativo en el alcance organizacional.")
@@ -283,10 +283,10 @@ def render() -> None:
                             perfil_id=perfil_actual["id"] if perfil_actual else None,
                         )
                         if ok:
-                            st.success(f"✅ {msg}")
+                            st.success(f"{msg}")
                             st.rerun()
                         else:
-                            st.error(f"❌ {msg}")
+                            st.error(f"{msg}")
                 else:
                     # sin_solicitud o solicitud_en_tramite
                     ok, msg = save_perfil_mpi(
@@ -309,16 +309,16 @@ def render() -> None:
                         perfil_id=perfil_actual["id"] if perfil_actual else None,
                     )
                     if ok:
-                        st.success(f"✅ {msg}")
+                        st.success(f"{msg}")
                         st.rerun()
                     else:
-                        st.error(f"❌ {msg}")
+                        st.error(f"{msg}")
 
         # Historial de Perfiles de la empresa
         df_perfiles = get_perfiles_df(empresa_id=empresa_id)
         if not df_perfiles.empty:
             st.markdown("---")
-            st.subheader("📜 Historial de Perfiles y Versiones del Modelo")
+            st.subheader("Historial de Perfiles y Versiones del Modelo")
             st.dataframe(
                 df_perfiles[[
                     "id", "version_modelo", "representante_legal_nombre",
@@ -335,7 +335,7 @@ def render() -> None:
     with tab_dpd:
         st.subheader("Designación y Facultades del Delegado de Protección de Datos (DPD)")
         st.info(
-            "📌 **Referencias Decreto N° 662:**  \n"
+            "**Referencias Decreto N° 662:**  \n"
             "- **Art. 3 b) y Art. 6:** Obligatoriedad de designación del delegado en el marco del MPI.  \n"
             "- **Art. 7:** Calidad del delegado (trabajador dependiente o prestación de servicios).  \n"
             "- **Art. 8:** Designación por máxima autoridad y autonomía respecto de la administración.  \n"
@@ -447,9 +447,9 @@ def render() -> None:
                 key="ev_dpd_sel",
             )
 
-            st.caption("🔒 **Nota de Deber de Secreto (Art. 12):** El delegado está sujeto a estricto deber de reserva y secreto profesional respecto de los datos e información conocidos en el ejercicio de sus funciones.")
+            st.caption("**Nota de Deber de Secreto (Art. 12):** El delegado está sujeto a estricto deber de reserva y secreto profesional respecto de los datos e información conocidos en el ejercicio de sus funciones.")
 
-            sub_dpd = st.form_submit_button("💾 Guardar Delegado de Protección de Datos", type="primary", use_container_width=True)
+            sub_dpd = st.form_submit_button("Guardar Delegado de Protección de Datos", type="primary", use_container_width=True)
             if sub_dpd:
                 if not dpd_nombre or not dpd_nombre.strip() or not dpd_email or not dpd_email.strip():
                     st.error("El nombre completo y el correo de contacto público del Delegado son obligatorios (Arts. 3 b y 11).")
@@ -473,16 +473,16 @@ def render() -> None:
                         delegado_id=delegado_actual["id"] if delegado_actual else None,
                     )
                     if ok:
-                        st.success(f"✅ {msg}")
+                        st.success(f"{msg}")
                         st.rerun()
                     else:
-                        st.error(f"❌ {msg}")
+                        st.error(f"{msg}")
 
         # Listado de Delegados (con RUT enmascarado para protección de datos)
         df_delegados = get_delegados_df(empresa_id=empresa_id)
         if not df_delegados.empty:
             st.markdown("---")
-            st.subheader("📜 Historial de Delegados de la Empresa")
+            st.subheader("Historial de Delegados de la Empresa")
             st.dataframe(
                 df_delegados[[
                     "id", "nombre_completo", "email_contacto_publico",
@@ -497,7 +497,7 @@ def render() -> None:
     # PESTAÑA 3: TRAZABILIDAD NORMATIVA (DECRETO N° 662)
     # ==========================================================================
     with tab_normativa:
-        st.subheader("📖 Marco Normativo de Referencia — Decreto N° 662")
+        st.subheader("Marco Normativo de Referencia — Decreto N° 662")
         st.markdown(
             "Reglamento que regula requisitos, modalidades y procedimientos para implementación, certificación, "
             "registro y supervisión de los Modelos de Prevención de Infracciones (MPI) a que se refiere el **artículo 49 incorporado por Ley N° 21.719 a la Ley N° 19.628**."

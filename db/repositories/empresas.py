@@ -17,9 +17,11 @@ def _invalidar_cache_dependiente() -> None:
     aparece en sus JOIN y el DELETE en cascada elimina sus filas.
     Import perezoso para evitar dependencias circulares entre repositorios.
     """
-    from db.repositories import derechos, importaciones, tratamientos
+    from db.repositories import derechos, importaciones, riesgos, tratamientos
 
     derechos.get_solicitudes_df.clear()
+    riesgos.get_riesgos_df.clear()
+    riesgos.get_eipd_df.clear()
     tratamientos.get_tratamientos_df.clear()
     importaciones.get_importaciones_df.clear()
     importaciones.get_importaciones_reabribles_df.clear()

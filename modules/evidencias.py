@@ -18,7 +18,7 @@ from db.repositories.empresas import get_empresas_df
 
 
 def render() -> None:
-    st.header("📸 Registro y Gestión de Evidencias")
+    st.header("Registro y Gestión de Evidencias")
     st.caption(
         "Las evidencias se registran como URLs externas (Google Drive, SharePoint, OneDrive). "
         "No se almacenan archivos en la base de datos."
@@ -26,10 +26,10 @@ def render() -> None:
 
     df_visitas = get_visitas_df()
     if df_visitas.empty:
-        st.warning("⚠️ Primero debes registrar visitas/auditorías para poder adjuntarles evidencias.")
+        st.warning("Primero debes registrar visitas/auditorías para poder adjuntarles evidencias.")
         return
 
-    tab_lista, tab_crear = st.tabs(["📋 Evidencias Registradas", "➕ Adjuntar Nueva Evidencia"])
+    tab_lista, tab_crear = st.tabs(["Evidencias Registradas", "Adjuntar Nueva Evidencia"])
     visita_map = {
         f"Auditoría #{r['id']} — {r['empresa']} ({r['fecha_visita']})": r["id"]
         for _, r in df_visitas.iterrows()
@@ -72,17 +72,17 @@ def render() -> None:
                 placeholder="Ej. https://drive.google.com/... o https://sharepoint.com/...",
             )
 
-            submitted_ev = st.form_submit_button("💾 Guardar Evidencia", use_container_width=True, type="primary")
+            submitted_ev = st.form_submit_button("Guardar Evidencia", use_container_width=True, type="primary")
             if submitted_ev:
                 if not descripcion_ev or not descripcion_ev.strip():
                     st.error("La descripción de la evidencia es obligatoria.")
                 else:
                     ok, msg = add_evidencia(vid_seleccionado, evaluacion_id_form, descripcion_ev, foto_url)
                     if ok:
-                        st.success(f"✅ {msg}")
+                        st.success(f"{msg}")
                         st.rerun()
                     else:
-                        st.error(f"❌ {msg}")
+                        st.error(f"{msg}")
 
     # ── Listado ───────────────────────────────────────────────────────────────
     with tab_lista:
@@ -117,7 +117,7 @@ def render() -> None:
         )
 
         st.markdown("---")
-        st.subheader("🖼️ Galería y Detalle de Evidencias")
+        st.subheader("Galería y Detalle de Evidencias")
         for _, r in df_evidencias.iterrows():
             with st.container():
                 st.markdown(
@@ -125,13 +125,13 @@ def render() -> None:
                     f"{r['empresa']} ({r['fecha_visita']})"
                 )
                 if r.get("evaluacion_nombre"):
-                    st.caption(f"📁 Evaluación: {r['evaluacion_nombre']}")
-                st.write(f"📝 {r['descripcion']}")
+                    st.caption(f"Evaluación: {r['evaluacion_nombre']}")
+                st.write(f"{r['descripcion']}")
                 if r["foto_url"]:
-                    st.markdown(f"🔗 [Abrir Enlace de Evidencia]({r['foto_url']})")
+                    st.markdown(f"[Abrir Enlace de Evidencia]({r['foto_url']})")
                     if any(r["foto_url"].lower().endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".webp"]):
                         st.image(r["foto_url"], width=400)
-                if st.button("🗑️ Eliminar Evidencia", key=f"del_ev_{r['id']}"):
+                if st.button("Eliminar Evidencia", key=f"del_ev_{r['id']}"):
                     ok, msg = delete_evidencia(r["id"])
                     if ok:
                         st.success(msg)

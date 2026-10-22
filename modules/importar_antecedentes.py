@@ -77,7 +77,7 @@ LIMITE_SESION_BYTES = 30 * 1024 * 1024  # 30 MB
 # ==============================================================================
 
 def render() -> None:
-    st.header("📥 Importar Antecedentes RAT")
+    st.header("Importar Antecedentes RAT")
     st.caption(
         "Bandeja documental para importar antecedentes históricos útiles para el levantamiento del "
         "RAT *(Decreto N° 662, Art. 3 letra d)*. "
@@ -85,17 +85,16 @@ def render() -> None:
     )
 
     st.info(
-        "⚠️ **Los datos extraídos de documentos son borradores no validados.** "
+        "**Los datos extraídos de documentos son borradores no validados.** "
         "No acreditan cumplimiento y no modifican automáticamente tratamientos existentes: "
         "cada candidato requiere revisión humana antes de incorporarse al RAT, y luego debe "
         "completarse y validarse en el módulo ☷ Tratamientos (RAT).",
-        icon="🛡️",
     )
 
     tab_nueva, tab_revisar, tab_historial = st.tabs([
-        "📤 Nueva Importación",
-        "🔍 Revisar y Conciliar Candidatos",
-        "📋 Historial de Importaciones",
+        "Nueva Importación",
+        "Revisar y Conciliar Candidatos",
+        "Historial de Importaciones",
     ])
 
     with tab_nueva:
@@ -116,7 +115,7 @@ def _tab_nueva_importacion() -> None:
     # ── VALIDACIÓN Y SINCRONIZACIÓN DE EMPRESA ────────────────────────────────
     df_emp = get_empresas_df()
     if df_emp.empty:
-        st.warning("⚠️ No hay empresas registradas. Regístrelas primero en el módulo 🏢 Empresas.")
+        st.warning("No hay empresas registradas. Regístrelas primero en el módulo Empresas.")
         return
 
     opciones_emp = {f'{r["nombre"]} ({r["rut"]})': int(r["id"]) for _, r in df_emp.iterrows()}
@@ -198,12 +197,12 @@ def _tab_nueva_importacion() -> None:
                 label_visibility="collapsed",
             )
         with col_btn:
-            if st.button("📂 Abrir", key="btn_abrir_importacion", use_container_width=True):
+            if st.button("Abrir", key="btn_abrir_importacion", use_container_width=True):
                 imp_id_seleccionado = opciones_reabrir[imp_reabrir_label]
                 datos_imp = get_importacion_por_id(imp_id_seleccionado, empresa_contexto_id)
                 if datos_imp is None:
                     st.error(
-                        "⛔ No se pudo abrir esa importación. "
+                        "No se pudo abrir esa importación. "
                         "Verifique que pertenezca a la empresa seleccionada."
                     )
                 else:
@@ -250,7 +249,7 @@ def _tab_nueva_importacion() -> None:
         total_utiles_rr = st.session_state.get("_imp_reabierta_total_utiles", len(filas_rr))
 
         st.success(
-            f"✅ **Importación #{imp_reabierta_id} reabierta** — "
+            f"**Importación #{imp_reabierta_id} reabierta** — "
             f"`{nombre_rr}` ({tipo_rr.upper()}) | "
             f"{len(filas_rr)} filas | Origen: {tabla_rr or '—'}"
         )
@@ -314,7 +313,7 @@ def _tab_nueva_importacion() -> None:
 
         col_btn_save_rr, col_btn_close_rr = st.columns([2, 1])
         with col_btn_save_rr:
-            if st.button("💾 Guardar importación RAT", key=f"btn_guardar_rr_{imp_reabierta_id}"):
+            if st.button("Guardar importación RAT", key=f"btn_guardar_rr_{imp_reabierta_id}"):
                 mapeo_guardar = {
                     str(i): (mapeo_restaurado.get(i) or "(No mapear)")
                     for i in range(len(enc_rr))
@@ -335,12 +334,12 @@ def _tab_nueva_importacion() -> None:
                 )
                 if imp_id_act:
                     st.session_state["_imp_reabierta_mapeo"] = mapeo_guardar
-                    st.success(f"✅ Mapeo y configuración de la Importación #{imp_id_act} guardados en la base de datos.")
+                    st.success(f"Mapeo y configuración de la Importación #{imp_id_act} guardados en la base de datos.")
                 else:
-                    st.error(f"⛔ Error al actualizar importación: {msg_act}")
+                    st.error(f"Error al actualizar importación: {msg_act}")
 
         with col_btn_close_rr:
-            if st.button("✖ Cerrar importación reabierta", key="btn_cerrar_reabierta", use_container_width=True):
+            if st.button("Cerrar importación reabierta", key="btn_cerrar_reabierta", use_container_width=True):
                 for clave in (
                     "importacion_reabierta_id", "_imp_reabierta_encabezados",
                     "_imp_reabierta_filas", "_imp_reabierta_mapeo",
@@ -380,11 +379,10 @@ def _tab_nueva_importacion() -> None:
 
     # ── AVISO OBLIGATORIO DE PRIVACIDAD Y LEGITIMIDAD ──────────────────────────
     st.warning(
-        "🔒 **Aviso de Privacidad y Legitimidad:**\n\n"
+        "**Aviso de Privacidad y Legitimidad:**\n\n"
         "Antes de cargar un antecedente, confirme que cuenta con autorización y finalidad legítima "
         "para tratar los datos contenidos en el documento. No cargue credenciales, secretos, "
         "datos sensibles innecesarios ni documentos cuyo contenido no deba procesarse en esta plataforma.",
-        icon="🔐",
     )
 
     # ── PASO 2: Subida del archivo ────────────────────────────────────────────
@@ -411,12 +409,12 @@ def _tab_nueva_importacion() -> None:
     archivos_sesion = st.session_state.get("imp_archivos_sesion", 0)
 
     if archivos_sesion >= LIMITE_SESION_ARCHIVOS:
-        st.error(f"⛔ Límite de sesión alcanzado: máximo {LIMITE_SESION_ARCHIVOS} archivos por sesión.")
+        st.error(f"Límite de sesión alcanzado: máximo {LIMITE_SESION_ARCHIVOS} archivos por sesión.")
         return
 
     if bytes_sesion + len(contenido) > LIMITE_SESION_BYTES:
         st.error(
-            f"⛔ Límite de sesión acumulado alcanzado (30 MB). "
+            f"Límite de sesión acumulado alcanzado (30 MB). "
             f"Usado: {bytes_sesion / 1024 / 1024:.2f} MB. "
             f"Este archivo: {len(contenido) / 1024 / 1024:.2f} MB."
         )
@@ -429,11 +427,11 @@ def _tab_nueva_importacion() -> None:
 
     if not es_valido:
         for err in errores:
-            st.error(f"⛔ {err}")
+            st.error(f"{err}")
         st.stop()
 
     for adv in advertencias_formato:
-        st.warning(f"⚠️ {adv}")
+        st.warning(f"{adv}")
 
     hash_archivo = calcular_hash_sha256(contenido)
     tamano_kb = len(contenido) / 1024
@@ -447,7 +445,7 @@ def _tab_nueva_importacion() -> None:
     advertencias_list = list(advertencias_formato)
     if dup:
         msg_dup = (
-            f"⚠️ **Importación previa detectada:** Este archivo ya fue registrado el "
+            f"**Importación previa detectada:** Este archivo ya fue registrado el "
             f"{str(dup['created_at'])[:10]} (Importación #{dup['id']} — {dup['nombre_archivo']}, "
             f"estado: {dup['estado']}). Al guardar, el sistema completará automáticamente "
             "los candidatos faltantes sin duplicar los ya existentes."
@@ -455,7 +453,7 @@ def _tab_nueva_importacion() -> None:
         st.warning(msg_dup)
         advertencias_list.append(f"Importación previa #{dup['id']} ({dup['nombre_archivo']})")
 
-    st.success(f"✅ Archivo '{archivo.name}' validado correctamente en memoria.")
+    st.success(f"Archivo '{archivo.name}' validado correctamente en memoria.")
     st.markdown("---")
 
     # ── CONTROL OPT-IN DE PRIVACIDAD: CAMPOS NO MAPEADOS ───────────────────────
@@ -467,7 +465,7 @@ def _tab_nueva_importacion() -> None:
         help="Desactivado por defecto por principio de minimización de datos. Si se activa, las columnas que no mapee a campos RAT se guardarán como borrador adicional (máx. 4.000 caracteres por campo).",
     )
     if not conservar_adicionales:
-        st.caption("🔒 **Minimización activa:** Solo se guardarán los campos que mapee explícitamente a la normativa RAT.")
+        st.caption("**Minimización activa:** Solo se guardarán los campos que mapee explícitamente a la normativa RAT.")
 
     st.markdown("---")
 
@@ -518,7 +516,7 @@ def _tab_nueva_importacion() -> None:
 
     if truncados_contador > 0:
         st.warning(
-            f"ℹ️ **Límite de tamaño por campo aplicado:** {truncados_contador} valor(es) superaban los "
+            f"**Límite de tamaño por campo aplicado:** {truncados_contador} valor(es) superaban los "
             f"{MAX_CARACTERES_CAMPO} caracteres y fueron truncados de forma controlada para cumplir "
             "con las políticas de almacenamiento y privacidad."
         )
@@ -533,9 +531,8 @@ def _tab_nueva_importacion() -> None:
 
     st.markdown(f"#### Candidatos generados: {n} de {filas_utiles_totales} filas útiles detectadas")
     st.info(
-        "Todos están catalogados como **⚠️ DATOS NO VALIDADOS** y no alteran la base de datos "
+        "Todos están catalogados como **DATOS NO VALIDADOS** y no alteran la base de datos "
         "hasta que los revise individualmente en la pestaña de conciliación.",
-        icon="🛡️",
     )
 
     resumen_cands = []
@@ -566,7 +563,7 @@ def _tab_nueva_importacion() -> None:
     tiene_evidencia_url = evidencia_id is not None
 
     if not tiene_evidencia_url:
-        st.caption("ℹ️ Esta importación quedará marcada como 'Sin evidencia permanente vinculada'.")
+        st.caption("Esta importación quedará marcada como 'Sin evidencia permanente vinculada'.")
 
     st.markdown("---")
 
@@ -583,7 +580,7 @@ def _tab_nueva_importacion() -> None:
     if cands_previos_en_bd > 0:
         cands_nuevos_estimados = max(n - cands_previos_en_bd, 0)
         st.info(
-            f"ℹ️ **Estado de la bandeja:**\n"
+            f"**Estado de la bandeja:**\n"
             f"- Filas útiles detectadas: **{n}**\n"
             f"- Candidatos ya existentes en BD (Importación #{id_importacion_existente}): **{cands_previos_en_bd}**\n"
             f"- Candidatos nuevos a crear: **{cands_nuevos_estimados}**\n"
@@ -591,9 +588,9 @@ def _tab_nueva_importacion() -> None:
         )
 
     texto_boton = (
-        f"💾 Completar candidatos faltantes ({n - cands_previos_en_bd} nuevos)"
+        f"Completar candidatos faltantes ({n - cands_previos_en_bd} nuevos)"
         if cands_previos_en_bd > 0
-        else f"💾 Guardar {n} candidatos en la bandeja para revisión"
+        else f"Guardar {n} candidatos en la bandeja para revisión"
     )
 
     if st.button(texto_boton, type="primary", key=f"btn_registrar_{hash_archivo}"):
@@ -667,9 +664,9 @@ def _tab_nueva_importacion() -> None:
             st.session_state.pop(f"imp_filas_utiles_{hash_archivo}", None)
 
             st.success(
-                f"✅ **Importación completada:** {insertados} candidatos nuevos creados "
+                f"**Importación completada:** {insertados} candidatos nuevos creados "
                 f"({omitidos_duplicados} ya existían). Total registrado: {total_en_bd} candidatos.\n\n"
-                "Pase a la pestaña **🔍 Revisar y Conciliar Candidatos** para procesarlos individualmente."
+                "Pase a la pestaña **Revisar y Conciliar Candidatos** para procesarlos individualmente."
             )
             st.rerun()
 
@@ -745,7 +742,7 @@ def _flujo_xlsx(
     truncados = 0
     total_utiles = total_datos
 
-    if st.button("▶ Generar candidatos desde XLSX", key=f"btn_gen_xlsx_{hash_archivo}"):
+    if st.button("▸ Generar candidatos desde XLSX", key=f"btn_gen_xlsx_{hash_archivo}"):
         try:
             candidatos, truncados, total_utiles = generar_candidatos_xlsx(
                 contenido, hoja_sel, mapeo, conservar_adicionales=conservar_adicionales
@@ -755,12 +752,12 @@ def _flujo_xlsx(
             st.session_state[f"imp_campos_{hash_archivo}"] = campos_mapeados
             st.session_state[f"imp_truncados_{hash_archivo}"] = truncados
             st.session_state[f"imp_filas_utiles_{hash_archivo}"] = total_utiles
-            st.success(f"✅ Candidatos generados: {len(candidatos)} de {total_utiles} filas útiles detectadas.")
+            st.success(f"Candidatos generados: {len(candidatos)} de {total_utiles} filas útiles detectadas.")
         except Exception as exc:
             st.error(f"Error al generar candidatos: {exc}")
     cands = st.session_state.get(f"imp_candidatos_{hash_archivo}", candidatos_previos)
     tot = st.session_state.get(f"imp_filas_utiles_{hash_archivo}", total_utiles)
-    # Fase 2A.3: persistir matriz, tabla origen y mapeo para '💾 Guardar importación RAT'
+    # Fase 2A.3: persistir matriz, tabla origen y mapeo para 'Guardar importación RAT'
     st.session_state[f"_imp_filas_raw_{hash_archivo}"] = datos[:200] if len(datos) > 200 else datos
     st.session_state[f"imp_tabla_origen_{hash_archivo}"] = f"Hoja: {hoja_sel}"
     st.session_state[f"imp_mapeo_actual_{hash_archivo}"] = {
@@ -825,7 +822,7 @@ def _flujo_csv(
     truncados = 0
     total_utiles = total_datos
 
-    if st.button("▶ Generar candidatos desde CSV", key=f"btn_gen_csv_{hash_archivo}"):
+    if st.button("▸ Generar candidatos desde CSV", key=f"btn_gen_csv_{hash_archivo}"):
         try:
             candidatos, truncados, total_utiles = generar_candidatos_csv(
                 contenido, mapeo, conservar_adicionales=conservar_adicionales
@@ -835,13 +832,13 @@ def _flujo_csv(
             st.session_state[f"imp_campos_{hash_archivo}"] = campos_mapeados
             st.session_state[f"imp_truncados_{hash_archivo}"] = truncados
             st.session_state[f"imp_filas_utiles_{hash_archivo}"] = total_utiles
-            st.success(f"✅ Candidatos generados: {len(candidatos)} de {total_utiles} filas útiles detectadas.")
+            st.success(f"Candidatos generados: {len(candidatos)} de {total_utiles} filas útiles detectadas.")
         except Exception as exc:
             st.error(f"Error al generar candidatos: {exc}")
 
     cands = st.session_state.get(f"imp_candidatos_{hash_archivo}", candidatos_previos)
     tot = st.session_state.get(f"imp_filas_utiles_{hash_archivo}", total_utiles)
-    # Fase 2A.3: persistir matriz, tabla origen y mapeo para '💾 Guardar importación RAT'
+    # Fase 2A.3: persistir matriz, tabla origen y mapeo para 'Guardar importación RAT'
     st.session_state[f"_imp_filas_raw_{hash_archivo}"] = datos[:200] if len(datos) > 200 else datos
     st.session_state[f"imp_tabla_origen_{hash_archivo}"] = "Archivo CSV"
     st.session_state[f"imp_mapeo_actual_{hash_archivo}"] = {
@@ -922,7 +919,7 @@ def _flujo_docx(
         mapeo = _selector_mapeo_columnas(encabezados, hash_archivo)
         campos_mapeados = [v for v in mapeo.values() if v]
 
-        # Fase 2A.3: persistir matriz, tabla origen y mapeo para '💾 Guardar importación RAT'
+        # Fase 2A.3: persistir matriz, tabla origen y mapeo para 'Guardar importación RAT'
         st.session_state[f"_imp_filas_raw_{hash_archivo}"] = filas_datos[:200] if len(filas_datos) > 200 else filas_datos
         st.session_state[f"imp_tabla_origen_{hash_archivo}"] = f"Tabla {idx_tabla + 1}"
         st.session_state[f"imp_mapeo_actual_{hash_archivo}"] = {
@@ -948,7 +945,7 @@ def _flujo_docx(
             st.info("Mapee al menos una columna.")
             return candidatos, encabezados, [], 0, total_datos
 
-        if st.button("▶ Generar candidatos desde tabla DOCX", key=f"btn_gen_docx_{hash_archivo}"):
+        if st.button("▸ Generar candidatos desde tabla DOCX", key=f"btn_gen_docx_{hash_archivo}"):
             nuevos, truncados, total_utiles, combinaciones = generar_candidatos_docx_tabla(
                 estructura, idx_tabla, mapeo, conservar_adicionales=conservar_adicionales
             )
@@ -960,9 +957,9 @@ def _flujo_docx(
             st.session_state[f"imp_filas_utiles_{hash_archivo}"] = total_utiles
 
             if combinaciones > 0:
-                st.info(f"ℹ️ Se combinaron valores de columnas con el mismo destino usando el separador ' / ' en {combinaciones} campo(s).")
+                st.info(f"Se combinaron valores de columnas con el mismo destino usando el separador ' / ' en {combinaciones} campo(s).")
 
-            st.success(f"✅ Candidatos generados: {len(candidatos)} de {total_utiles} filas útiles detectadas.")
+            st.success(f"Candidatos generados: {len(candidatos)} de {total_utiles} filas útiles detectadas.")
 
     else:
         if not secciones:
@@ -981,7 +978,7 @@ def _flujo_docx(
         if cand_data:
             candidatos.append(crear_candidato_manual_texto(sel_seccion if secciones else "Texto libre DOCX", cand_data))
             st.session_state[f"imp_candidatos_{hash_archivo}"] = candidatos
-            st.success("✅ Candidato manual añadido.")
+            st.success("Candidato manual añadido.")
 
     cands = st.session_state.get(f"imp_candidatos_{hash_archivo}", candidatos)
     tot = st.session_state.get(f"imp_filas_utiles_{hash_archivo}", total_utiles or len(cands))
@@ -1010,7 +1007,7 @@ def _flujo_pdf(contenido: bytes, hash_archivo: str, candidatos_previos: list, em
 
     if paginas_sin_texto:
         st.warning(
-            f"⚠️ {len(paginas_sin_texto)} página(s) sin texto extraíble: "
+            f"{len(paginas_sin_texto)} página(s) sin texto extraíble: "
             f"{[p['nro_pagina'] for p in paginas_sin_texto]}. Formato diferido."
         )
 
@@ -1038,7 +1035,7 @@ def _flujo_pdf(contenido: bytes, hash_archivo: str, candidatos_previos: list, em
     if cand_data:
         candidatos.append(crear_candidato_manual_pdf(nro_pagina, cand_data))
         st.session_state[f"imp_candidatos_{hash_archivo}"] = candidatos
-        st.success(f"✅ Candidato manual añadido desde Página {nro_pagina}.")
+        st.success(f"Candidato manual añadido desde Página {nro_pagina}.")
 
     cands = st.session_state.get(f"imp_candidatos_{hash_archivo}", candidatos)
     return cands, [f"Página {nro_pagina}"], list(cand_data.keys()) if cand_data else [], 0, len(cands)
@@ -1059,7 +1056,7 @@ def _flujo_texto(contenido: bytes, hash_archivo: str, candidatos_previos: list, 
     if cand_data:
         candidatos.append(crear_candidato_manual_texto(f"Bloque {tipo.upper()}", cand_data))
         st.session_state[f"imp_candidatos_{hash_archivo}"] = candidatos
-        st.success("✅ Candidato manual añadido.")
+        st.success("Candidato manual añadido.")
 
     cands = st.session_state.get(f"imp_candidatos_{hash_archivo}", candidatos)
     return cands, [f"Bloque {tipo.upper()}"], list(cand_data.keys()) if cand_data else [], 0, len(cands)
@@ -1084,10 +1081,10 @@ def _indice_a_letra_excel(idx: int) -> str:
 
 
 def _etiqueta_columna(idx: int, encabezado: str) -> str:
-    """Genera la etiqueta visual uniforme: 🔷 {letra} · Col. {idx}: {encabezado}."""
+    """Genera la etiqueta visual uniforme: {letra} · Col. {idx}: {encabezado}."""
     letra = _indice_a_letra_excel(idx)
     enc_limpio = str(encabezado).strip() if encabezado and str(encabezado).strip() else "Sin encabezado"
-    return f"🔷 {letra} · Col. {idx}: {enc_limpio}"
+    return f"{letra} · Col. {idx}: {enc_limpio}"
 
 
 def _render_referencia_activa(
@@ -1120,7 +1117,7 @@ def _render_referencia_activa(
         destino_label = "(No mapear)"
 
     st.markdown("──────────────────────────────────────────────────")
-    st.markdown("**🔷 Referencia activa en archivo importado**")
+    st.markdown("**Referencia activa en archivo importado**")
     st.markdown(f"**{letra} · Col. {col_activa_idx} — {enc_limpio}**")
     st.markdown(f"**Campo RAT elegido:** {destino_label}")
 
@@ -1163,7 +1160,7 @@ def _render_boton_guardar_importacion_rat(
     meta_importacion: dict | None = None,
 ) -> None:
     """
-    Renderiza el botón '💾 Guardar importación RAT' inmediatamente después del mapeo y referencia activa.
+    Renderiza el botón 'Guardar importación RAT' inmediatamente después del mapeo y referencia activa.
     Persiste metadatos, matriz extraída y mapeo en la base de datos sin requerir generar candidatos previamente.
     """
     empresa_contexto_id = (
@@ -1177,7 +1174,7 @@ def _render_boton_guardar_importacion_rat(
         return
 
     guardar_importacion_click = st.button(
-        "💾 Guardar importación RAT",
+        "Guardar importación RAT",
         key=f"guardar_importacion_rat_{hash_archivo}",
         type="primary",
         help="Guarda metadatos, previsualización y mapeo en la base de datos para poder reabrirlos sin subir el archivo nuevamente.",
@@ -1233,11 +1230,11 @@ def _render_boton_guardar_importacion_rat(
             fue_actualizada = bool(id_existente and int(id_existente) == imp_id)
             verbo = "actualizada" if fue_actualizada else "guardada"
             st.success(
-                f"✅ Importación RAT {verbo}. ID: #{imp_id}. Archivo: {nombre_archivo}. "
+                f"Importación RAT {verbo}. ID: #{imp_id}. Archivo: {nombre_archivo}. "
                 f"Filas de origen: {total_filas}. Filas útiles: {total_utiles}. Mapeo guardado."
             )
         else:
-            st.error(f"⛔ Error al guardar importación: {msg}")
+            st.error(f"Error al guardar importación: {msg}")
 
 
 def _selector_mapeo_columnas(encabezados: list[str], key_base: str) -> dict:
@@ -1274,8 +1271,8 @@ def _selector_mapeo_columnas(encabezados: list[str], key_base: str) -> dict:
 
 def _formulario_candidato_manual(key_base: str, seccion_origen: str = "") -> dict | None:
     """Formulario para crear un candidato manualmente campo por campo."""
-    with st.expander("📝 Crear candidato manualmente desde este texto", expanded=False):
-        st.caption("⚠️ **Datos no validados.** Complete solo los campos que el texto indica expresamente.")
+    with st.expander("Crear candidato manualmente desde este texto", expanded=False):
+        st.caption("**Datos no validados.** Complete solo los campos que el texto indica expresamente.")
         campos = {}
         for i in range(0, len(CAMPOS_RAT_DECRETO), 2):
             par = CAMPOS_RAT_DECRETO[i: i + 2]
@@ -1288,7 +1285,7 @@ def _formulario_candidato_manual(key_base: str, seccion_origen: str = "") -> dic
                     placeholder="(dejar vacío si no consta en el texto)",
                 )
 
-        if st.button("➕ Agregar candidato", key=f"btn_{key_base}"):
+        if st.button("Agregar candidato", key=f"btn_{key_base}"):
             no_vacios = {k: v for k, v in campos.items() if v and v.strip()}
             if not no_vacios:
                 st.warning("Complete al menos un campo antes de agregar el candidato.")
@@ -1339,7 +1336,7 @@ def _tab_revisar_candidatos() -> None:
     df_cand = get_candidatos_df(empresa_id=empresa_id, estado_revision="pendiente")
 
     if df_cand.empty:
-        st.success("✅ No hay candidatos pendientes de revisión para esta empresa.")
+        st.success("No hay candidatos pendientes de revisión para esta empresa.")
         _mostrar_historial_revisados(empresa_id)
         return
 
@@ -1393,14 +1390,14 @@ def _tab_revisar_candidatos() -> None:
             f"Fila: {cand['nro_fila'] or cand['nro_pagina'] or cand['seccion_origen'] or '—'}"
         )
 
-        with st.expander(f"⚠️ Candidato #{cand_id} — {origen_info}", expanded=False):
+        with st.expander(f"Candidato #{cand_id} — {origen_info}", expanded=False):
             try:
                 datos_json = json.loads(cand["datos_json"]) if isinstance(cand["datos_json"], str) else {}
             except Exception:
                 datos_json = {}
 
-            st.caption(f"📍 **Origen documental:** {origen_info}")
-            st.caption("⚠️ **DATOS EXTRAÍDOS NO VALIDADOS — Requieren confirmación humana explícita**")
+            st.caption(f"**Origen documental:** {origen_info}")
+            st.caption("**DATOS EXTRAÍDOS NO VALIDADOS — Requieren confirmación humana explícita**")
 
             nombre_cand = datos_json.get("nombre_tratamiento", "")
             nombre_cand_limpio = str(nombre_cand or "").strip()
@@ -1416,7 +1413,7 @@ def _tab_revisar_candidatos() -> None:
             )
             if similar:
                 st.warning(
-                    f"⚠️ **Coincidencia detectada:** Existe tratamiento ID #{similar['id']} — "
+                    f"**Coincidencia detectada:** Existe tratamiento ID #{similar['id']} — "
                     f"**{similar['nombre_tratamiento']}** con nombre coincidente. "
                     "Considere conciliarlo en lugar de crear un tratamiento duplicado."
                 )
@@ -1459,11 +1456,11 @@ def _tab_revisar_candidatos() -> None:
                 )
 
                 st.caption(
-                    "ℹ️ El tratamiento se incorporará al RAT con los datos extraídos. "
+                    "El tratamiento se incorporará al RAT con los datos extraídos. "
                     "Revise y complete sus 11 numerales en ☷ Tratamientos (RAT) antes de considerarlo validado."
                 )
 
-                if st.button("✅ Crear Tratamiento", type="primary", key=f"btn_crear_{cand_id}"):
+                if st.button("Crear Tratamiento", type="primary", key=f"btn_crear_{cand_id}"):
                     ok, msg = aplicar_accion_candidato(
                         candidato_id=cand_id,
                         accion="crear_borrador",
@@ -1484,7 +1481,7 @@ def _tab_revisar_candidatos() -> None:
             # ACCIÓN 2: CONCILIAR CON TRATAMIENTO EXISTENTE (LADO A LADO)
             # ──────────────────────────────────────────────────────────────────
             elif modo_accion.startswith("2."):
-                st.markdown("##### ⚖️ Conciliación campo a campo")
+                st.markdown("##### Conciliación campo a campo")
                 st.write(
                     "Seleccione el tratamiento existente. Podrá comparar el valor actual de cada campo "
                     "contra el valor extraído y elegir **manualmente** cuáles desea actualizar."
@@ -1555,7 +1552,7 @@ def _tab_revisar_candidatos() -> None:
 
                         if not campos_seleccionados_actualizar:
                             st.warning(
-                                "⚠️ **Ningún campo seleccionado.** Marque al menos una casilla '¿Aplicar?' "
+                                "**Ningún campo seleccionado.** Marque al menos una casilla '¿Aplicar?' "
                                 "para habilitar la confirmación. Ningún dato se modificará automáticamente."
                             )
                         else:
@@ -1571,7 +1568,7 @@ def _tab_revisar_candidatos() -> None:
                                 max_chars=500,
                             )
 
-                            if st.button("💾 Aplicar cambios confirmados", type="primary", key=f"btn_aplicar_concil_{cand_id}"):
+                            if st.button("Aplicar cambios confirmados", type="primary", key=f"btn_aplicar_concil_{cand_id}"):
                                 payload_final = {}
                                 for clave_c, _ in CAMPOS_RAT_DECRETO:
                                     if clave_c in campos_seleccionados_actualizar:
@@ -1618,7 +1615,7 @@ def _tab_revisar_candidatos() -> None:
                                     )
                                     actualizar_contadores_importacion(importacion_id)
                                     st.success(
-                                        f"✅ Tratamiento #{trat_id_sel} actualizado exitosamente con los campos confirmados. "
+                                        f"Tratamiento #{trat_id_sel} actualizado exitosamente con los campos confirmados. "
                                         "Trazabilidad registrada en el candidato."
                                     )
                                     st.rerun()
@@ -1637,7 +1634,7 @@ def _tab_revisar_candidatos() -> None:
                     key=f"obs_ign_{cand_id}",
                     max_chars=500,
                 )
-                if st.button("🗑️ Confirmar e Ignorar Candidato", key=f"btn_conf_ign_{cand_id}"):
+                if st.button("Confirmar e Ignorar Candidato", key=f"btn_conf_ign_{cand_id}"):
                     ok, msg = aplicar_accion_candidato(
                         candidato_id=cand_id,
                         accion="ignorar",

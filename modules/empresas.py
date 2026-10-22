@@ -14,9 +14,9 @@ from db.repositories.empresas import (
 
 
 def render() -> None:
-    st.header("🏢 Gestión de Empresas del Grupo / Clientes")
+    st.header("Gestión de Empresas del Grupo / Clientes")
 
-    tab_lista, tab_crear = st.tabs(["📋 Listado de Empresas", "➕ Registrar Nueva Empresa"])
+    tab_lista, tab_crear = st.tabs(["Listado de Empresas", "Registrar Nueva Empresa"])
 
     # ── Crear empresa ─────────────────────────────────────────────────────────
     with tab_crear:
@@ -32,22 +32,22 @@ def render() -> None:
                 email    = st.text_input("Correo Electrónico", placeholder="Ej. contacto@empresa.cl")
                 telefono = st.text_input("Teléfono", placeholder="Ej. +56 9 1234 5678")
 
-            submitted = st.form_submit_button("💾 Guardar Empresa", use_container_width=True, type="primary")
+            submitted = st.form_submit_button("Guardar Empresa", use_container_width=True, type="primary")
             if submitted:
                 if not nombre or not rut:
                     st.error("Por favor completa los campos obligatorios: **Nombre** y **RUT**.")
                 else:
                     ok, msg = add_empresa(nombre, rut, direccion, contacto, email, telefono)
                     if ok:
-                        st.success(f"✅ {msg}")
+                        st.success(f"{msg}")
                         st.rerun()
                     else:
-                        st.error(f"❌ {msg}")
+                        st.error(f"{msg}")
 
     # ── Listado y acciones ────────────────────────────────────────────────────
     with tab_lista:
         buscador = st.text_input(
-            "🔍 Buscar empresa por Nombre o RUT:",
+            "Buscar empresa por Nombre o RUT:",
             placeholder="Escribe para filtrar...",
         )
         df_empresas = get_empresas_df(search_term=buscador)
@@ -64,7 +64,7 @@ def render() -> None:
         )
 
         st.markdown("---")
-        st.subheader("⚙️ Acciones por Empresa")
+        st.subheader("Acciones por Empresa")
 
         empresa_opciones = {
             f"{r['id']} - {r['nombre']} ({r['rut']})": r["id"]
@@ -92,7 +92,7 @@ def render() -> None:
         col_edit, col_del = st.columns([2, 1])
 
         with col_edit:
-            with st.expander(f"✏️ Editar: {empresa_data['nombre']}", expanded=False):
+            with st.expander(f"Editar: {empresa_data['nombre']}", expanded=False):
                 with st.form(f"form_edit_empresa_{empresa_sel_id}"):
                     e_nombre  = st.text_input("Nombre", value=empresa_data["nombre"])
                     e_rut     = st.text_input("RUT", value=empresa_data["rut"])
@@ -103,15 +103,15 @@ def render() -> None:
                     if st.form_submit_button("Actualizar Cambios", type="primary"):
                         ok, msg = update_empresa(empresa_sel_id, e_nombre, e_rut, e_dir, e_cont, e_mail, e_tel)
                         if ok:
-                            st.success(f"✅ {msg}")
+                            st.success(f"{msg}")
                             st.rerun()
                         else:
-                            st.error(f"❌ {msg}")
+                            st.error(f"{msg}")
 
         with col_del:
-            with st.expander("🗑️ Eliminar Empresa"):
+            with st.expander("Eliminar Empresa"):
                 st.warning(
-                    "⚠️ **Atención:** Eliminar esta empresa borrará también sus "
+                    "**Atención:** Eliminar esta empresa borrará también sus "
                     "evaluaciones, tratamientos, visitas y evidencias vinculadas."
                 )
                 confirmar = st.checkbox(

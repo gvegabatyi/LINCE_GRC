@@ -35,7 +35,8 @@
 │       ├── evaluaciones.py    # Repositorio Evaluaciones
 │       ├── visitas.py         # Repositorio Visitas y Auditorías
 │       ├── evidencias.py      # Repositorio Evidencias
-│       └── derechos.py        # Repositorio Solicitudes de Derechos (escrituras por id + empresa_id)
+│       ├── derechos.py        # Repositorio Solicitudes de Derechos (escrituras por id + empresa_id)
+│       └── riesgos.py         # Repositorio Riesgos y EIPD (escrituras por id + empresa_id)
 ├── modules/                   # Capa de presentación (UI Streamlit). NO debe contener SQL crudo
 ├── services/                  # Lógica de negocio pesada, parsers (DOCX, Excel) y cálculos
 ├── utils/                     # Constantes, validadores y componentes visuales

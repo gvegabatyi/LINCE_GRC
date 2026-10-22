@@ -94,7 +94,7 @@ def _tab_copiloto() -> None:
 
 
 def render() -> None:
-    st.title("§ Normativa")
+    st.header("Normativa")
     st.caption(
         "Citas literales de la Ley 19.628, Ley 21.719, Ley 21.663 y Decreto Supremo N° 662, "
         "desde el corpus oficial verificado del proyecto."

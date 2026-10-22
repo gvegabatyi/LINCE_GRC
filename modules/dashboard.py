@@ -9,6 +9,8 @@ import pandas as pd
 
 from db.repositories.derechos import get_solicitudes_df, resumen_plazos
 from db.repositories.empresas import get_empresas_df
+from db.repositories.riesgos import get_eipd_df, get_riesgos_df
+from services.riesgos_service import disparadores_eipd_detectados, nivel_riesgo
 from db.repositories.evaluaciones import get_evaluaciones_df
 from db.repositories.tratamientos import get_tratamientos_df
 from db.repositories.visitas import get_visitas_df
@@ -19,7 +21,7 @@ from services.checklist_service import calcular_porcentaje, nivel_cumplimiento
 
 
 def render() -> None:
-    st.header("◈ Panel de Control GRC")
+    st.header("Panel de Control GRC")
     st.caption("LINCE GRC // Cumplimiento integral de protección de datos personales · Ley N° 19.628 modificada por la Ley N° 21.719 · Ley N° 21.663")
 
     df_emp  = get_empresas_df()
@@ -51,7 +53,7 @@ def render() -> None:
     # ==========================================================================
     # DERECHOS DE LOS TITULARES: PLAZOS LEGALES (todas las empresas)
     # ==========================================================================
-    st.subheader("⚖ Solicitudes de Derechos de los Titulares")
+    st.subheader("▸ Solicitudes de Derechos de los Titulares")
     df_sol = get_solicitudes_df()
     resumen = resumen_plazos(df_sol)
     d1, d2, d3, d4 = st.columns(4)
@@ -60,9 +62,34 @@ def render() -> None:
     d3.metric("Vencidas", resumen["vencida"])
     d4.metric("Respondidas", resumen["respondida"])
     if resumen["vencida"]:
-        st.error(f"Hay {resumen['vencida']} solicitud(es) con plazo legal vencido. Revise el módulo ⚖ Derechos de los Titulares.")
+        st.error(f"Hay {resumen['vencida']} solicitud(es) con plazo legal vencido. Revise el módulo ◇ Derechos de los Titulares.")
     elif resumen["por_vencer"]:
         st.warning(f"Hay {resumen['por_vencer']} solicitud(es) próximas a vencer.")
+
+    st.markdown("---")
+
+    # ==========================================================================
+    # ANÁLISIS DE RIESGOS Y EIPD (todas las empresas)
+    # ==========================================================================
+    st.subheader("▸ Análisis de Riesgos")
+    df_rsg = get_riesgos_df()
+    abiertos = df_rsg[df_rsg["estado"] != "cerrado"] if not df_rsg.empty else df_rsg
+    niveles = [nivel_riesgo(r["probabilidad"], r["impacto"])[1] for _, r in abiertos.iterrows()] if not df_rsg.empty else []
+    df_eipd = get_eipd_df()
+    aprobadas = set(df_eipd[df_eipd["estado"] == "aprobada"]["tratamiento_id"].dropna().astype(int)) if not df_eipd.empty else set()
+    eipd_pendientes = sum(
+        1 for _, t in df_trat.iterrows()
+        if disparadores_eipd_detectados(t) and int(t["id"]) not in aprobadas
+    ) if not df_trat.empty else 0
+    r1, r2, r3, r4 = st.columns(4)
+    r1.metric("Riesgos abiertos", len(abiertos))
+    r2.metric("Críticos", niveles.count("critico"))
+    r3.metric("Altos", niveles.count("alto"))
+    r4.metric("EIPD pendientes", eipd_pendientes)
+    if niveles.count("critico"):
+        st.error(f"Hay {niveles.count('critico')} riesgo(s) crítico(s) abiertos. Revise el módulo Análisis de Riesgos.")
+    if eipd_pendientes:
+        st.warning(f"{eipd_pendientes} tratamiento(s) con indicios de EIPD obligatoria sin evaluación aprobada (art. 15 ter).")
 
     st.markdown("---")
 

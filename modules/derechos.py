@@ -53,7 +53,7 @@ def _aviso(ok: bool, msg: str) -> None:
 def _mostrar_aviso() -> None:
     resultado = st.session_state.pop(_CLAVE_AVISO, None)
     if resultado:
-        (st.success if resultado[0] else st.error)(("✅ " if resultado[0] else "❌ ") + resultado[1])
+        (st.success if resultado[0] else st.error)(resultado[1])
 
 
 def _fecha(valor) -> date:
@@ -132,7 +132,7 @@ def _tab_nueva(empresa_id: int) -> None:
             help="Ley 21.719 art. 11: debe responderse dentro de 2 días hábiles y, mientras tanto, "
                  "no se pueden tratar los datos objeto del requerimiento.",
         )
-        enviar = st.form_submit_button("💾 Registrar solicitud", type="primary")
+        enviar = st.form_submit_button("Registrar solicitud", type="primary")
 
     if enviar:
         if not titular.strip() or not contacto.strip():
@@ -243,7 +243,7 @@ def _tab_gestionar(df: pd.DataFrame, empresa_id: int) -> None:
         evidencia_r = r2.selectbox("Respaldo del envío (evidencia)", list(ev_ops.keys()),
                                    help="Ley 21.719 art. 11: guardar respaldo de la remisión, su fecha y contenido íntegro.")
         fundamento_r = st.text_area("Fundamento (obligatorio si se deniega total o parcialmente)")
-        if st.form_submit_button("💾 Registrar respuesta", type="primary"):
+        if st.form_submit_button("Registrar respuesta", type="primary"):
             ok, msg = registrar_respuesta(sid, empresa_id, estado_r, fecha_r, medio_r,
                                           fundamento_r, ev_ops[evidencia_r])
             if ok and estado_r in ("denegada", "acogida_parcial"):
@@ -280,14 +280,14 @@ def _tab_base_legal() -> None:
 
 
 def render() -> None:
-    st.header("⚖ Derechos de los Titulares")
+    st.header("Derechos de los Titulares")
     st.caption(
         "Estándar dual: plazo exigible según la Ley 19.628 vigente o la Ley 21.719 (desde el 01-12-2026), "
         "determinado por la fecha de ingreso de cada solicitud."
     )
     df_empresas = get_empresas_df()
     if df_empresas.empty:
-        st.warning("⚠️ Primero debes registrar al menos una empresa.")
+        st.warning("Primero debes registrar al menos una empresa.")
         return
 
     empresa_id = _selector_empresa(df_empresas)
@@ -301,7 +301,7 @@ def render() -> None:
     m3.metric("Vencidas", resumen["vencida"])
     m4.metric("Respondidas", resumen["respondida"])
 
-    t1, t2, t3, t4 = st.tabs(["📋 Bandeja", "➕ Nueva solicitud", "🛠 Gestionar", "§ Base legal"])
+    t1, t2, t3, t4 = st.tabs(["Bandeja", "Nueva solicitud", "Gestionar", "§ Base legal"])
     with t1:
         _tab_bandeja(df)
     with t2:

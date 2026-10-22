@@ -40,14 +40,14 @@ def _build_eval_options(empresa_id: int) -> dict:
 
 
 def render() -> None:
-    st.header("🔍 Auditorías en Terreno y Checklist de Seguridad")
+    st.header("Auditorías en Terreno y Checklist de Seguridad")
 
     df_empresas = get_empresas_df()
     if df_empresas.empty:
-        st.warning("⚠️ Debes registrar empresas antes de poder realizar auditorías.")
+        st.warning("Debes registrar empresas antes de poder realizar auditorías.")
         return
 
-    tab_lista, tab_crear = st.tabs(["📋 Historial de Auditorías", "➕ Nueva Auditoría en Terreno"])
+    tab_lista, tab_crear = st.tabs(["Historial de Auditorías", "Nueva Auditoría en Terreno"])
     empresa_map = {
         f"{r['id']} - {r['nombre']} ({r['rut']})": r["id"]
         for _, r in df_empresas.iterrows()
@@ -85,7 +85,7 @@ def render() -> None:
             with col_tv:
                 tipo_visita_sel = st.selectbox("Tipo de Visita", TIPOS_VISITA)
 
-            st.markdown("#### 📝 Checklist de Seguridad de la Información (15 Puntos)")
+            st.markdown("#### Checklist de Seguridad de la Información (15 Puntos)")
             st.caption("Selecciona el estado de cumplimiento de cada control. **Sí = 1 pto**, **No = 0 ptos**, **N/A = 0 ptos**.")
 
             respuestas_checklist = {}
@@ -106,7 +106,7 @@ def render() -> None:
                 height=100,
             )
 
-            btn_guardar = st.form_submit_button("💾 Guardar Auditoría", use_container_width=True, type="primary")
+            btn_guardar = st.form_submit_button("Guardar Auditoría", use_container_width=True, type="primary")
 
             if btn_guardar:
                 if not vis_auditor or not vis_auditor.strip():
@@ -127,11 +127,11 @@ def render() -> None:
                     if ok:
                         porcentaje = calcular_porcentaje(puntaje)
                         st.success(
-                            f"✅ {msg} Resultado: **{puntaje}/15 — {nivel_cumplimiento(porcentaje)}**"
+                            f"{msg} Resultado: **{puntaje}/15 — {nivel_cumplimiento(porcentaje)}**"
                         )
                         st.rerun()
                     else:
-                        st.error(f"❌ {msg}")
+                        st.error(f"{msg}")
 
     # ── Historial ─────────────────────────────────────────────────────────────
     with tab_lista:
@@ -173,7 +173,7 @@ def render() -> None:
         )
 
         st.markdown("---")
-        st.subheader("🔍 Detalle del Checklist de Auditoría")
+        st.subheader("Detalle del Checklist de Auditoría")
         vis_opciones = {
             f"ID {r['id']} — {r['empresa']} ({r['fecha_visita']}) {r.get('tipo_visita', '')}": r["id"]
             for _, r in df_visitas.iterrows()
@@ -182,7 +182,7 @@ def render() -> None:
         vis_sel_id  = vis_opciones[vis_sel_str]
         v_row = df_visitas[df_visitas["id"] == vis_sel_id].iloc[0]
 
-        with st.expander(f"📊 Desglose: Auditoría #{vis_sel_id}", expanded=True):
+        with st.expander(f"Desglose: Auditoría #{vis_sel_id}", expanded=True):
             p   = int(v_row["puntaje"] or 0)
             pct = calcular_porcentaje(p)
             dc1, dc2 = st.columns(2)
@@ -210,7 +210,7 @@ def render() -> None:
                 for preg, r in items[mitad:]:
                     st.write(f"{icono_respuesta(r)} **{preg}**: `{r}`")
 
-            if st.button("🗑️ Eliminar esta Auditoría", key=f"del_vis_{vis_sel_id}", type="secondary"):
+            if st.button("Eliminar esta Auditoría", key=f"del_vis_{vis_sel_id}", type="secondary"):
                 ok, msg = delete_visita(vis_sel_id)
                 if ok:
                     st.success(msg)

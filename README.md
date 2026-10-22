@@ -19,23 +19,23 @@ El MPI es uno de los componentes de Lince, no su alcance. La plataforma acompañ
 
 | Menú | Función |
 |---|---|
-| ◈ Dashboard | Métricas consolidadas y alertas de plazos de solicitudes de derechos |
+| ◈ Dashboard | Métricas consolidadas, alertas de plazos de derechos, riesgos críticos y EIPD pendientes |
 | ▣ Empresas | Gestión de empresas cliente y selección de la empresa activa |
 | ◬ Evaluaciones GRC | Contenedor de proyectos de evaluación por empresa y período |
 | ◆ Perfil MPI y Delegado | Responsable y representante legal, delegado de protección de datos y estados declarativos de certificación (DS 662) |
 | ☷ Tratamientos (RAT) | Registro de actividades de tratamiento con los 11 numerales del DS 662 art. 3 d) |
-| ⚖ Derechos de los Titulares | Solicitudes de acceso, rectificación, supresión, oposición, bloqueo y portabilidad, con plazos legales según la fecha de ingreso (Ley 19.628 vigente / Ley 21.719 desde el 01-12-2026), prórroga, bloqueo temporal, respuesta fundada y respaldo |
+| ◇ Derechos de los Titulares | Solicitudes de acceso, rectificación, supresión, oposición, bloqueo y portabilidad, con plazos legales según la fecha de ingreso (Ley 19.628 vigente / Ley 21.719 desde el 01-12-2026), prórroga, bloqueo temporal, respuesta fundada y respaldo |
+| △ Análisis de Riesgos | Diagnóstico automático desde los datos de Lince, evaluación probabilidad × impacto con residual y plan de acción, mapa de calor, matriz de riesgos del MPI (DS 662 art. 3 e) y EIPD por tratamiento (Ley 21.719 art. 15 ter) |
 | ⤓ Importar Antecedentes RAT | Importación documental (XLSX, CSV, DOCX, PDF con texto, MD, TXT), mapeo de columnas y conciliación con revisión humana |
 | ⌖ Visitas / Auditorías | Auditorías en terreno con checklist de seguridad de 15 puntos |
 | ◫ Evidencias | Enlaces a evidencias externas (no almacena archivos) |
-| ⇲ Exportar Informe | Informe Excel consolidado de 13 hojas |
+| ⇲ Exportar Informe | Informe Excel consolidado de 15 hojas |
 | § Normativa | Citas literales verificadas de las 4 normas, búsqueda y copiloto LLM opcional segregado de los datos |
 
 **Todavía no implementado** (ver la ruta al MVP en el documento de auditoría, §13-§14):
 - registro de vulneraciones (art. 14 sexies) e incidentes de ciberseguridad (Ley 21.663);
-- evaluación de impacto (EIPD);
 - usuarios, roles y bitácora;
-- matriz de riesgos y canal de denuncias del MPI;
+- protocolos, canal de denuncias y sanciones internas del MPI;
 - hallazgos y planes de acción.
 
 > [!CAUTION]
